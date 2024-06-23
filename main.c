@@ -2,9 +2,12 @@
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
 #include <X11/Xatom.h>
+#include <X11/extensions/shape.h>
 
 #include "main.h"
 #include "utils.h"
+#include "pixmaps/window_mask.xbm"
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,10 +65,10 @@ void createAndMap_root_window(Window *root_win, int argc, char **argv){
 	
 	// Creating Root Window
 	int root_x, root_y, root_width, root_height;
-	root_width = 300;
-	root_height = 200;
-	root_x = display_width - root_width;
-	root_y = 0;
+	root_width = 250;
+	root_height = 150;
+	root_x = display_width - root_width - 5;
+	root_y = 8;
 	*root_win = XCreateSimpleWindow(display, RootWindow(display, screen_num), root_x, root_y, root_width, root_height, 2, BlackPixel(display, screen_num), WhitePixel(display, screen_num));
 
 	// Motif Hints for root window : appliying NO DECORATIONS
@@ -74,7 +77,7 @@ void createAndMap_root_window(Window *root_win, int argc, char **argv){
 	hints.flags = MWM_HINTS_DECORATIONS;
 	hints.decorations = 0 ;
 	XChangeProperty(display, *root_win, mwmHintsProperty, mwmHintsProperty, 32,
-                    PropModeReplace, (unsigned char *)&hints, sizeof(hints)/4);
+                   PropModeReplace, (unsigned char *)&hints, sizeof(hints)/4);
 
 
 	// Allocating Size Hints
@@ -124,8 +127,23 @@ void createAndMap_root_window(Window *root_win, int argc, char **argv){
 	XSetWMProperties(display, *root_win, &windowName, &iconName, argv, argc, root_size_hints, wm_hints, class_hints);
 
 	// Selecting Types of Input for Root Window
-	XSelectInput(display, *root_win, ExposureMask | ButtonPressMask | KeyPressMask);
+	XSelectInput(display, *root_win, ExposureMask);
+
+	Window child;
+	child = XCreateSimpleWindow(display, *root_win, 0, 0, 250, 50, 2, BlackPixel(display, screen_num), bgcolor.pixel);;
+	Pixmap shape_mask;
+	GC gc;
+	XGCValues values;
+
+	shape_mask =  XCreateBitmapFromData(display, child, 
+		window_mask_bits, window_mask_width, window_mask_height); // depth - 1, i.e, Bitmap
+	
+	XShapeCombineMask(display, child, ShapeBounding, 0, 0, shape_mask, ShapeSet);
+	XFreePixmap(display, shape_mask);
+
+	XSelectInput(display, child, ExposureMask | ButtonPressMask | KeyPressMask);
 	XMapWindow(display, *root_win);
+	XMapWindow(display, child);
 }
 
 void start_event_loop(){
