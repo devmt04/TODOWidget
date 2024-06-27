@@ -12,6 +12,7 @@
 #include "pixmaps/tile_window_mask_250x35.xbm"
 #include "pixmaps/addnewbtn_window_mask.xbm"
 #include "pixmaps/addnewbtn_icon.xbm"
+#include "pixmaps/cross.xbm"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +28,7 @@ void createInitialMsgWindow();
 void drawInitialMsgString();
 void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int strlength);
 void drawAddNewBtn();
+void drawTodoInputExitBtn();
 
 Display *display;
 int screen_num;
@@ -38,7 +40,7 @@ XColor addnewbtncolor;
 
 XFontStruct *font_info;
 
-Window root_win, initialmsg_window, addbtn_win;
+Window root_win, initialmsg_window, addbtn_win, todoinput_win, todoinputwin_exit_btn;
 
 int isInitialWindowMapped = 0;
 
@@ -176,12 +178,20 @@ void createAndMap_root_window(int argc, char **argv){
 	XFreePixmap(display, addbtn_shapemask);
 
 	// Selecting Types of Input for Root Window
-	XSelectInput(display, root_win, ExposureMask | ButtonPressMask | KeyPressMask | StructureNotifyMask);
-	XSelectInput(display, addbtn_win, ExposureMask | ButtonPressMask | StructureNotifyMask);
+	
+	//XSelectInput(display, root_win, ExposureMask);
+	XSelectInput(display, addbtn_win, ExposureMask | ButtonPressMask);
+	
 	XMapWindow(display, root_win);
 	XMapWindow(display, addbtn_win);
-	// XRaiseWindow(display, addbtn_win);
-	XFlush(display);
+
+	todoinput_win = XCreateSimpleWindow(display, root_win, (root_width - (root_width -35))/2, (root_height - (root_height -35))/2, root_width - 35, root_height - 35, 3, BlackPixel(display, screen_num), addnewbtncolor.pixel);
+	
+	todoinputwin_exit_btn = XCreateSimpleWindow(display, root_win, (root_width - 35/2)-(10+3), (35/2)+8, 10, 10, 0, BlackPixel(display, screen_num), WhitePixel(display, screen_num));
+	XSelectInput(display, todoinput_win, ExposureMask | ButtonPressMask);
+	XSelectInput(display, todoinputwin_exit_btn, ExposureMask | ButtonPressMask);
+
+	//XFlush(display);
 	
 	/*
 	Window child, child2;
@@ -235,12 +245,21 @@ void start_event_loop(){
 			if(report.xexpose.window == addbtn_win){
 				drawAddNewBtn();
 			}
-
-
-
+			if(report.xexpose.window == todoinput_win){
+				drawTodoInputExitBtn();
+			}
 			break;
 		case ButtonPress:
-			printf("Button Pressed\n");
+			if(report.xbutton.window == addbtn_win){
+				XMapWindow(display, todoinput_win);
+				XMapWindow(display, todoinputwin_exit_btn);
+				XRaiseWindow(display, todoinput_win);
+				XRaiseWindow(display, todoinputwin_exit_btn);	
+			}
+			if(report.xbutton.window == todoinputwin_exit_btn){
+				XUnmapWindow(display, todoinput_win);
+				XUnmapWindow(display, todoinputwin_exit_btn);
+			}
 			break;
 		case KeyPress:
 			printf("key\n");
@@ -250,6 +269,18 @@ void start_event_loop(){
 		}
 		fflush(stdout);
 	}
+}
+
+void drawTodoInputExitBtn(){
+	XGCValues values;
+	unsigned long valuemask = 0; 
+	GC gc = XCreateGC(display, todoinputwin_exit_btn, valuemask, &values);
+	XSetForeground(display, gc, BlackPixel(display, screen_num));
+	XSetBackground(display, gc, addnewbtncolor.pixel);
+	Pixmap exitbtn_icon = XCreateBitmapFromData(display, todoinputwin_exit_btn, cross_bits, cross_width, cross_height);
+	XCopyPlane(display, exitbtn_icon, todoinputwin_exit_btn, gc, 0, 0, cross_width, cross_height, 0 , 0 , 1);
+	XFreePixmap(display, exitbtn_icon);
+	XFreeGC(display, gc);
 }
 
 void drawAddNewBtn(){
