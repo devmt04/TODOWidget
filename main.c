@@ -40,7 +40,7 @@ XColor addnewbtncolor;
 
 XFontStruct *font_info;
 
-Window root_win, initialmsg_window, addbtn_win, todoinput_win, todoinputwin_exit_btn;
+Window root_win, initialmsg_window, addbtn_win, todoinput_win, todoinputwin_exit_btn, todoinput_textfield;
 
 int isInitialWindowMapped = 0;
 
@@ -186,11 +186,12 @@ void createAndMap_root_window(int argc, char **argv){
 	XMapWindow(display, addbtn_win);
 
 	todoinput_win = XCreateSimpleWindow(display, root_win, (root_width - (root_width -35))/2, (root_height - (root_height -35))/2, root_width - 35, root_height - 35, 3, BlackPixel(display, screen_num), addnewbtncolor.pixel);
-	
 	todoinputwin_exit_btn = XCreateSimpleWindow(display, root_win, (root_width - 35/2)-(10+3), (35/2)+8, 10, 10, 0, BlackPixel(display, screen_num), WhitePixel(display, screen_num));
+	todoinput_textfield = XCreateSimpleWindow(display, root_win, (root_width - (root_width -35))/2 + 3, (root_height - (root_height -35))/2 + 3, (root_width - 35) - 2, (root_height - 35)-25, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
+
 	XSelectInput(display, todoinput_win, ExposureMask | ButtonPressMask);
 	XSelectInput(display, todoinputwin_exit_btn, ExposureMask | ButtonPressMask);
-
+	XSelectInput(display, todoinputwin_exit_btn, ExposureMask | KeyPressMask);
 	//XFlush(display);
 	
 	/*
@@ -253,12 +254,15 @@ void start_event_loop(){
 			if(report.xbutton.window == addbtn_win){
 				XMapWindow(display, todoinput_win);
 				XMapWindow(display, todoinputwin_exit_btn);
+				XMapWindow(display, todoinput_textfield);
 				XRaiseWindow(display, todoinput_win);
-				XRaiseWindow(display, todoinputwin_exit_btn);	
+				XRaiseWindow(display, todoinput_textfield);
+				XRaiseWindow(display, todoinputwin_exit_btn);
 			}
 			if(report.xbutton.window == todoinputwin_exit_btn){
 				XUnmapWindow(display, todoinput_win);
 				XUnmapWindow(display, todoinputwin_exit_btn);
+				XUnmapWindow(display, todoinput_textfield);
 			}
 			break;
 		case KeyPress:
