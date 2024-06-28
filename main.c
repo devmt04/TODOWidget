@@ -29,6 +29,7 @@ void drawInitialMsgString();
 void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int strlength);
 void drawAddNewBtn();
 void drawTodoInputExitBtn();
+void drawStringInTodoTextfield(GC *gc,char *string, int len);
 
 Display *display;
 int screen_num;
@@ -191,7 +192,7 @@ void createAndMap_root_window(int argc, char **argv){
 
 	XSelectInput(display, todoinput_win, ExposureMask | ButtonPressMask);
 	XSelectInput(display, todoinputwin_exit_btn, ExposureMask | ButtonPressMask);
-	XSelectInput(display, todoinputwin_exit_btn, ExposureMask | KeyPressMask);
+	XSelectInput(display, todoinput_textfield, ExposureMask | KeyPressMask);
 	//XFlush(display);
 	
 	/*
@@ -220,6 +221,19 @@ void createAndMap_root_window(int argc, char **argv){
 
 void start_event_loop(){
 	XEvent report;
+
+	char buffer[10] = "";
+	int bufsize = 10;
+	char string[100] = "";
+	KeySym keysym;
+	XComposeStatus compose;
+	int count;
+
+	XGCValues values;
+	unsigned long valuemask = 0; 
+	GC textGC = XCreateGC(display, todoinput_textfield, valuemask, &values);
+	XSetForeground(display, textGC, BlackPixel(display, screen_num));
+
  	//XSetInputFocus(display, RootWindow(display, DefaultScreen(display)), RevertToParent, CurrentTime);
 	while(1){
 		XNextEvent(display, &report);
@@ -263,16 +277,66 @@ void start_event_loop(){
 				XUnmapWindow(display, todoinput_win);
 				XUnmapWindow(display, todoinputwin_exit_btn);
 				XUnmapWindow(display, todoinput_textfield);
+				XFreeGC(display, textGC);
 			}
 			break;
 		case KeyPress:
-			printf("key\n");
+			if(report.xkey.window == todoinput_textfield){
+				count = XLookupString(&(report.xkey), buffer, bufsize, &keysym, &compose);
+				//printf("ASCII ???? value: %d\n", count);
+				if((keysym == XK_Return) || (keysym == XK_KP_Enter) || (keysym == XK_Linefeed)){
+					// HANDLE \N LATER
+					//strcat(string, "\n");
+					// strcat(string, "\0");
+				}
+				else if(((keysym >= XK_KP_Space) && (keysym <= XK_KP_9)) || ((keysym>=XK_space) && (keysym <= XK_asciitilde))){
+					strcat(string, buffer);
+					// strcat(string, "\0");
+					//printf("%s\n", string);
+				}
+				else if((keysym == XK_BackSpace) || (keysym == XK_Delete)){
+					int length = strlen(string);
+					if(length > 0){
+						string[length-1] = '\0';
+						XClearWindow(display, todoinput_textfield);
+					}
+				}
+				drawStringInTodoTextfield(&textGC, string, strlen(string));
+			}
 			break;
 		default:
 			break;
 		}
 		fflush(stdout);
 	}
+}
+
+void drawStringInTodoTextfield(GC *gc,char *string, int len){
+	XClearWindow(display, todoinput_textfield);
+	XWindowAttributes win_attr;
+	if (XGetWindowAttributes(display, todoinput_textfield, &win_attr) == 0) {
+        fprintf(stderr, "Error getting window attributes\n");
+        XCloseDisplay(display);
+        exit(-1);
+    }
+	
+	//int text_width = XTextWidth(font_info, string, len);
+	// int lines_needed = ((text_width % win_attr.width) == 0) ? text_width / win_attr.width : (text_width / win_attr.width) + 1;
+	int font_height = font_info->ascent + font_info->descent;
+	int max_chars_per_line = win_attr.width / XTextWidth(font_info, "M", 1);
+
+	int lines_needed = ((strlen(string) % max_chars_per_line) == 0) ? strlen(string) / max_chars_per_line : (strlen(string) / max_chars_per_line) + 1;
+	
+	int x = 10;
+	int y = 15;
+
+	char *buff = (char *)malloc(max_chars_per_line+1);
+	for(int i=0;i<lines_needed;i++){
+		int _len = snprintf(buff, max_chars_per_line+1, "%s", string + i * max_chars_per_line);
+		XDrawString(display, todoinput_textfield, *gc, x, y + i * font_height, buff, strlen(buff));
+		XFlush(display);
+	}
+	free(buff);
 }
 
 void drawTodoInputExitBtn(){
