@@ -243,7 +243,7 @@ void start_event_loop(){
 	KeySym keysym;
 	XComposeStatus compose;
 	int count;
-
+	int strlength = 0;
 	GC submitbtn_gc, textGC, wordLimitIndicator_gc;
 
 
@@ -277,7 +277,7 @@ void start_event_loop(){
 				drawTodoInputExitBtn();
 			}
 			if(report.xexpose.window == todoinput_textfield){
-				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlen(string));
+				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlength);
 			}
 			if(report.xexpose.window == todoinput_submit_btn){
 				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
@@ -303,28 +303,40 @@ void start_event_loop(){
 				XRaiseWindow(display, todoinputwin_exit_btn);
 				XRaiseWindow(display, todoinput_submit_btn);
 			}
-			if(report.xbutton.window == todoinputwin_exit_btn){
+			if(report.xbutton.window == todoinputwin_exit_btn){	
 				XUnmapWindow(display, todoinput_win);
 				XFreeGC(display, textGC);
 				XFreeGC(display, submitbtn_gc);
 				XFreeGC(display, wordLimitIndicator_gc);
 			}
 			if(report.xbutton.window == todoinput_submit_btn){
-				XSetWindowBackground(display, todoinput_submit_btn, WhitePixel(display, screen_num));
-				XClearWindow(display, todoinput_submit_btn);
-				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
-
+				if(strlength){
+					XSetWindowBackground(display, todoinput_submit_btn, WhitePixel(display, screen_num));
+					XClearWindow(display, todoinput_submit_btn);
+					XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+				}
 			}
 			break;
 		case ButtonRelease:
 			if(report.xbutton.window == todoinput_submit_btn){
-				XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
-				XClearWindow(display, todoinput_submit_btn);
-				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+				if(strlength){
+					XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
+					XClearWindow(display, todoinput_submit_btn);
+					XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
 
-				// LATER HANDLE THE DATA INSERTION IN PARALLEL TO IMPROVE PERFORMANCE
-				if(!insert_into_todotable(&db, db_primary_key,string)) exit(0);
-				db_primary_key++;
+					// LATER HANDLE THE DATA INSERTION IN PARALLEL TO IMPROVE PERFORMANCE
+					if(!insert_into_todotable(&db, db_primary_key,string)) exit(0);
+					
+					db_primary_key++;
+					memset(string, 0, sizeof(string));
+					strlength = 0;
+					XUnmapWindow(display, todoinput_win);
+					XFreeGC(display, textGC);
+					XFreeGC(display, submitbtn_gc);
+					XFreeGC(display, wordLimitIndicator_gc);
+				}else{
+					printf("Nothing to SUBMIT!\n");
+				}
 			}
 		case KeyPress:
 			if(report.xkey.window == todoinput_textfield){
@@ -337,18 +349,18 @@ void start_event_loop(){
 					// strcat(string, "\0");
 				}
 				else if(((keysym >= XK_KP_Space) && (keysym <= XK_KP_9)) || ((keysym>=XK_space) && (keysym <= XK_asciitilde))){
-					if(strlen(string) < 100) strcat(string, buffer); else printf("MAX CHAR REACHED\n");
+					if(strlength< 100) strcat(string, buffer); else printf("MAX CHAR REACHED\n");
 					// strcat(string, "\0");
 					//printf("%s\n", string);
 				}
 				else if((keysym == XK_BackSpace) || (keysym == XK_Delete)){
-					int length = strlen(string);
-					if(length > 0){
-						string[length-1] = '\0';
+					if(strlength > 0){
+						string[strlength-1] = '\0';
 						XClearWindow(display, todoinput_textfield);
 					}
 				}
-				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlen(string));
+				strlength = strlen(string);
+				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlength);
 			}
 			break;
 		default:
@@ -358,6 +370,7 @@ void start_event_loop(){
 		XFlush(display);
 	}
 }
+
 
 void drawStringInTodoTextfield(GC *textGC, GC *wordLimitIndicator_gc, char *string, int length){
 	XClearWindow(display, todoinput_textfield);
