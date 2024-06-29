@@ -29,7 +29,7 @@ void drawInitialMsgString();
 void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int strlength);
 void drawAddNewBtn();
 void drawTodoInputExitBtn();
-void drawStringInTodoTextfield(GC *gc,char *string, int len);
+void drawStringInTodoTextfield(GC *textGC, GC *wordLimitIndicator_gc, char *string, int len);
 void drawWordLimitIndicator(GC *gc,int len, int win_width, int win_height);
 
 Display *display;
@@ -39,12 +39,14 @@ char *progname;
 XColor bgcolor; // #747474
 XColor tilecolor; // #C8B4B4
 XColor addnewbtncolor;
-GC textGC;
+XColor warningred;
+
 XFontStruct *font_info;
 
 Window root_win, initialmsg_window, addbtn_win, todoinput_win, todoinputwin_exit_btn, todoinput_textfield, todoinput_submit_btn;
 
 int isInitialWindowMapped = 0;
+int warningColorSet = 0;
 
 int main(int argc, char **argv){
 	progname = argv[0];
@@ -94,6 +96,10 @@ void alloc_colors(){
 		exit(-1);
 	}
 	if(!alloc_color_from_hex(display, colormap, "#C8B4B4", &addnewbtncolor)){
+		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
+		exit(-1);
+	}
+	if(!alloc_color_from_hex(display, colormap, "#FF0000", &warningred)){
 		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
 		exit(-1);
 	}
@@ -190,12 +196,13 @@ void createAndMap_root_window(int argc, char **argv){
 	todoinput_win = XCreateSimpleWindow(display, root_win, (root_width - (root_width -35))/2, (root_height - (root_height -35))/2, root_width - 35, root_height - 35, 3, BlackPixel(display, screen_num), addnewbtncolor.pixel);
 	todoinputwin_exit_btn = XCreateSimpleWindow(display, todoinput_win, (root_width - 35) - 15, 5, 10, 10, 0, BlackPixel(display, screen_num), WhitePixel(display, screen_num));
 	todoinput_textfield = XCreateSimpleWindow(display, todoinput_win, 0, 0, (root_width - 35), (root_height - 35)-25, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
-	todoinput_submit_btn = XCreateSimpleWindow(display, todoinput_win, ((root_width - 35) - 100)/2, (root_height - 35)-24, 100, 25, 1, BlackPixel(display, screen_num), WhitePixel(display, screen_num));
+	todoinput_submit_btn = XCreateSimpleWindow(display, todoinput_win, ((root_width - 35) - (XTextWidth(font_info, "Submit", 6) + 15))/2, (root_height - 35)-24, XTextWidth(font_info, "Submit", 6) + 15, 25, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
 	// SHOW THIS POPUP AS A NOTICE
 
 	XSelectInput(display, todoinput_win, ExposureMask | ButtonPressMask);
 	XSelectInput(display, todoinputwin_exit_btn, ExposureMask | ButtonPressMask);
 	XSelectInput(display, todoinput_textfield, ExposureMask | KeyPressMask);
+	XSelectInput(display, todoinput_submit_btn, ExposureMask | ButtonPressMask);
 	//XFlush(display);
 	
 	/*
@@ -224,13 +231,15 @@ void createAndMap_root_window(int argc, char **argv){
 
 void start_event_loop(){
 	XEvent report;
-
 	char buffer[10] = "";
 	int bufsize = 10;
 	char string[100] = "";
 	KeySym keysym;
 	XComposeStatus compose;
 	int count;
+
+	GC submitbtn_gc, textGC, wordLimitIndicator_gc;
+
 
  	//XSetInputFocus(display, RootWindow(display, DefaultScreen(display)), RevertToParent, CurrentTime);
 	while(1){
@@ -261,18 +270,29 @@ void start_event_loop(){
 			if(report.xexpose.window == todoinput_win){
 				drawTodoInputExitBtn();
 			}
+			if(report.xexpose.window == todoinput_textfield){
+				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlen(string));
+			}
+			if(report.xexpose.window == todoinput_submit_btn){
+				XSetForeground(display, submitbtn_gc, BlackPixel(display, screen_num));
+				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+			}
 			break;
 		case ButtonPress:
 			if(report.xbutton.window == addbtn_win){
-				XGCValues values;
+				// XGCValues values;
 				unsigned long valuemask = 0; 
-				textGC = XCreateGC(display, todoinput_textfield, valuemask, &values);
-				XSetForeground(display, textGC, BlackPixel(display, screen_num));
-				
+				textGC = XCreateGC(display, todoinput_textfield, valuemask, NULL);
+
+				submitbtn_gc = XCreateGC(display, todoinput_submit_btn, (long)0, NULL);
+				wordLimitIndicator_gc =  XCreateGC(display, todoinput_textfield, (long)0, NULL);
+
+
 				XMapWindow(display, todoinput_win);
 				XMapWindow(display, todoinputwin_exit_btn);
 				XMapWindow(display, todoinput_textfield);
 				XMapWindow(display, todoinput_submit_btn);
+
 				XRaiseWindow(display, todoinput_win);
 				XRaiseWindow(display, todoinput_textfield);
 				XRaiseWindow(display, todoinputwin_exit_btn);
@@ -281,6 +301,8 @@ void start_event_loop(){
 			if(report.xbutton.window == todoinputwin_exit_btn){
 				XUnmapWindow(display, todoinput_win);
 				XFreeGC(display, textGC);
+				XFreeGC(display, submitbtn_gc);
+				XFreeGC(display, wordLimitIndicator_gc);
 			}
 			break;
 		case KeyPress:
@@ -305,7 +327,7 @@ void start_event_loop(){
 						XClearWindow(display, todoinput_textfield);
 					}
 				}
-				drawStringInTodoTextfield(&textGC, string, strlen(string));
+				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlen(string));
 			}
 			
 			break;
@@ -317,7 +339,7 @@ void start_event_loop(){
 	}
 }
 
-void drawStringInTodoTextfield(GC *gc,char *string, int len){
+void drawStringInTodoTextfield(GC *textGC, GC *wordLimitIndicator_gc, char *string, int length){
 	XClearWindow(display, todoinput_textfield);
 	XWindowAttributes win_attr;
 	if (XGetWindowAttributes(display, todoinput_textfield, &win_attr) == 0) {
@@ -331,7 +353,7 @@ void drawStringInTodoTextfield(GC *gc,char *string, int len){
 	int font_height = font_info->ascent + font_info->descent;
 	int max_chars_per_line = win_attr.width / XTextWidth(font_info, "M", 1);
 
-	int lines_needed = ((strlen(string) % max_chars_per_line) == 0) ? strlen(string) / max_chars_per_line : (strlen(string) / max_chars_per_line) + 1;
+	int lines_needed = ((length % max_chars_per_line) == 0) ? length / max_chars_per_line : (length / max_chars_per_line) + 1;
 	
 	int x = 10;
 	int y = 15;
@@ -339,12 +361,18 @@ void drawStringInTodoTextfield(GC *gc,char *string, int len){
 	char *buff = (char *)malloc(max_chars_per_line+1);
 	for(int i=0;i<lines_needed;i++){
 		int _len = snprintf(buff, max_chars_per_line+1, "%s", string + i * max_chars_per_line);
-		XDrawString(display, todoinput_textfield, *gc, x, y + i * font_height, buff, strlen(buff));
+		XDrawString(display, todoinput_textfield, *textGC, x, y + i * font_height, buff, strlen(buff));
 	}
 
-	drawWordLimitIndicator(gc, len, win_attr.width, win_attr.height);
-	//
+	if(length==100){
+		XSetForeground(display, *wordLimitIndicator_gc, warningred.pixel);
+		warningColorSet = 1;
+	}
+	else if(warningColorSet==1) XSetForeground(display, *wordLimitIndicator_gc, BlackPixel(display, screen_num));
 	
+	drawWordLimitIndicator(wordLimitIndicator_gc, length, win_attr.width, win_attr.height);
+
+	//
 	/*
 	int buff_width = XTextWidth(font_info, buff, strlen(buff));
 	printf("%d\n", buff_width);
