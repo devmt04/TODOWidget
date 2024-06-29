@@ -54,6 +54,23 @@ int fetch_max_id(sqlite3 **db){
 	return result;
 }
 
+int fetch_todo_count(sqlite3 **db){
+	int rc, result;
+	sqlite3_stmt *stmt;
+	char *sql = "SELECT COUNT(ID) FROM TODOTABLE";
+	rc = sqlite3_prepare_v2(*db, sql, -1, &stmt, NULL);
+	if( rc != SQLITE_OK){
+		fprintf(stderr, "DB (error): Failed to fetch MAX(ID): %s\n", sqlite3_errmsg(*db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	if (sqlite3_step(stmt) == SQLITE_ROW) {
+        result = sqlite3_column_int(stmt, 0);
+    }
+	sqlite3_finalize(stmt);
+	return result;
+}
+
 int is_table_exists(sqlite3 **db){
 	sqlite3_stmt *stmt;
 	const char *sql = "SELECT name FROM sqlite_master WHERE type='table' AND name=?;";

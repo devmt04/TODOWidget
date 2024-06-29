@@ -22,8 +22,6 @@
 #include <sqlite3.h>
 sqlite3 *db;
 
-#define NOTE_COUNT 0
-
 
 void open_display();
 void alloc_colors();
@@ -50,13 +48,61 @@ XFontStruct *font_info;
 
 Window root_win, initialmsg_window, addbtn_win, todoinput_win, todoinputwin_exit_btn, todoinput_textfield, todoinput_submit_btn;
 
+typedef struct {
+	Window *windows;
+	int size;
+	int capacity;
+} TODOWinArray;
+
 int isInitialWindowMapped = 0;
 int warningColorSet = 0;
 int db_primary_key;
+int todo_count;
+
+TODOWinArray todoWinArr;
+
+void initTODOWinArray(TODOWinArray *arr, int initialCapacity){
+	arr->windows = (Window *)malloc(initialCapacity * sizeof(Window));
+	arr->size = 0;
+	arr->capacity = initialCapacity;
+}
+
+void addInTODOWinArray(TODOWinArray *arr, Window win){
+	if(arr->size == arr->capacity){
+		arr->capacity *= 2;
+		arr->windows = (Window *)realloc(arr->windows, arr->capacity * sizeof(Window));
+	}
+	arr->windows[arr->size++] = win;
+}
+
+void freeWindowArray(TODOWinArray *arr) {
+    free(arr->windows);
+    arr->windows = NULL;
+    arr->size = 0;
+    arr->capacity = 0;
+}
+
+void drawTodoListWin(){
+	int root_width = 250;
+	int root_height = 150;
+
+	for(int i=0; i<fetch_todo_count(&db); i++){		
+		Window win = XCreateSimpleWindow(display, root_win, 5, 5+((35+5)*i), (root_width - 15), 35, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
+		addInTODOWinArray(&todoWinArr, win);
+		XMapWindow(display, win);
+	}
+
+
+	//fetch_all_from_table();
+}
 
 int main(int argc, char **argv){
 	progname = argv[0];
 	db_primary_key = prepare_database(&db);
+	todo_count = fetch_todo_count(&db);
+	
+	initTODOWinArray(&todoWinArr, 5);
+	
 	open_display();
 
 	// Loading fonts
@@ -184,7 +230,7 @@ void createAndMap_root_window(int argc, char **argv){
 	btn_x = root_width - btn_width - 15;
 	btn_y = root_height - btn_height - 15;
 	
-	addbtn_win = XCreateSimpleWindow(display, root_win, btn_x,btn_y,btn_width,btn_height,1,BlackPixel(display, screen_num), addnewbtncolor.pixel);
+	addbtn_win = XCreateSimpleWindow(display, root_win, btn_x,btn_y,btn_width,btn_height,0,BlackPixel(display, screen_num), addnewbtncolor.pixel);
 	
 	Pixmap addbtn_shapemask = XCreateBitmapFromData(display, addbtn_win, addnewbtn_window_mask_bits, addnewbtn_window_mask_width, addnewbtn_window_mask_height);
 
@@ -193,7 +239,7 @@ void createAndMap_root_window(int argc, char **argv){
 
 	// Selecting Types of Input for Root Window
 	
-	//XSelectInput(display, root_win, ExposureMask);
+	XSelectInput(display, root_win, ExposureMask);
 	XSelectInput(display, addbtn_win, ExposureMask | ButtonPressMask);
 	
 	XMapWindow(display, root_win);
@@ -245,7 +291,7 @@ void start_event_loop(){
 	int count;
 	int strlength = 0;
 	GC submitbtn_gc, textGC, wordLimitIndicator_gc;
-
+	printf("%d-----\n", isInitialWindowMapped);
 
  	//XSetInputFocus(display, RootWindow(display, DefaultScreen(display)), RevertToParent, CurrentTime);
 	while(1){
@@ -255,20 +301,20 @@ void start_event_loop(){
 			
 			if(report.xexpose.count!=0)
 				break;
-			
-			if(NOTE_COUNT == 0){
-				/* Display simple text msg */
-				if(isInitialWindowMapped == 0){
-					XMapWindow(display, initialmsg_window);
-					XRaiseWindow(display, addbtn_win);
-					isInitialWindowMapped = 1;
-				}else{
-					if(report.xexpose.window == initialmsg_window){
+			if(report.xexpose.window == root_win){
+				if(todo_count == 0){
+					/* Display simple text msg */
+					if(isInitialWindowMapped == 0){
+						XMapWindow(display, initialmsg_window);
+						drawInitialMsgString();
+						isInitialWindowMapped = 1;
+					}else{
 						drawInitialMsgString();
 					}
+				}else{
+					drawTodoListWin();
 				}
-			}else{
-
+				XRaiseWindow(display, addbtn_win);
 			}
 			if(report.xexpose.window == addbtn_win){
 				drawAddNewBtn();
@@ -328,6 +374,8 @@ void start_event_loop(){
 					if(!insert_into_todotable(&db, db_primary_key,string)) exit(0);
 					
 					db_primary_key++;
+					todo_count = fetch_todo_count(&db);
+
 					memset(string, 0, sizeof(string));
 					strlength = 0;
 					XUnmapWindow(display, todoinput_win);
@@ -370,6 +418,7 @@ void start_event_loop(){
 		XFlush(display);
 	}
 }
+
 
 
 void drawStringInTodoTextfield(GC *textGC, GC *wordLimitIndicator_gc, char *string, int length){
