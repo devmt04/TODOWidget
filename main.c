@@ -6,6 +6,7 @@
 
 #include "main.h"
 #include "utils.h"
+#include "database.h"
 
 #include "pixmaps/tile_window_mask_250x75.xbm"
 #include "pixmaps/tile_window_mask_250x55.xbm"
@@ -18,7 +19,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sqlite3.h>
+sqlite3 *db;
+
 #define NOTE_COUNT 0
+
 
 void open_display();
 void alloc_colors();
@@ -47,10 +52,11 @@ Window root_win, initialmsg_window, addbtn_win, todoinput_win, todoinputwin_exit
 
 int isInitialWindowMapped = 0;
 int warningColorSet = 0;
+int db_primary_key;
 
 int main(int argc, char **argv){
 	progname = argv[0];
-
+	db_primary_key = prepare_database(&db);
 	open_display();
 
 	// Loading fonts
@@ -64,7 +70,7 @@ int main(int argc, char **argv){
 	createAndMap_root_window(argc, argv);
 	createInitialMsgWindow();
 	start_event_loop();
-
+	close_db(&db);
 	XCloseDisplay(display);
 	return 0;
 }
@@ -202,7 +208,7 @@ void createAndMap_root_window(int argc, char **argv){
 	XSelectInput(display, todoinput_win, ExposureMask | ButtonPressMask);
 	XSelectInput(display, todoinputwin_exit_btn, ExposureMask | ButtonPressMask);
 	XSelectInput(display, todoinput_textfield, ExposureMask | KeyPressMask);
-	XSelectInput(display, todoinput_submit_btn, ExposureMask | ButtonPressMask);
+	XSelectInput(display, todoinput_submit_btn, ExposureMask | ButtonPressMask | ButtonReleaseMask);
 	//XFlush(display);
 	
 	/*
@@ -274,7 +280,6 @@ void start_event_loop(){
 				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlen(string));
 			}
 			if(report.xexpose.window == todoinput_submit_btn){
-				XSetForeground(display, submitbtn_gc, BlackPixel(display, screen_num));
 				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
 			}
 			break;
@@ -304,7 +309,23 @@ void start_event_loop(){
 				XFreeGC(display, submitbtn_gc);
 				XFreeGC(display, wordLimitIndicator_gc);
 			}
+			if(report.xbutton.window == todoinput_submit_btn){
+				XSetWindowBackground(display, todoinput_submit_btn, WhitePixel(display, screen_num));
+				XClearWindow(display, todoinput_submit_btn);
+				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+
+			}
 			break;
+		case ButtonRelease:
+			if(report.xbutton.window == todoinput_submit_btn){
+				XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
+				XClearWindow(display, todoinput_submit_btn);
+				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+
+				// LATER HANDLE THE DATA INSERTION IN PARALLEL TO IMPROVE PERFORMANCE
+				if(!insert_into_todotable(&db, db_primary_key,string)) exit(0);
+				db_primary_key++;
+			}
 		case KeyPress:
 			if(report.xkey.window == todoinput_textfield){
 				//printf("%d\n", strlen(string));
@@ -329,7 +350,6 @@ void start_event_loop(){
 				}
 				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlen(string));
 			}
-			
 			break;
 		default:
 			break;
@@ -467,7 +487,6 @@ void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int 
 	int avilable_width = win_attr.width - x ;
 	int text_width = XTextWidth(font_info, string, strlength);
 	int max_chars_per_line = avilable_width / XTextWidth(font_info, "M", 1); // assuming "M" is widest charcter
-	printf("max: %d\n", max_chars_per_line);
 	char *buff = (char *)malloc(max_chars_per_line+1);
 	int font_height = font_info->ascent + font_info->descent;
 
@@ -519,8 +538,4 @@ void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int 
 	}
 */
 	free(buff);
-	//int x_offset = 5;
-	//int y_offset = (win_attr.height - font_height  / 2);
-
-
 }
