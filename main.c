@@ -35,6 +35,7 @@ void drawTodoInputExitBtn();
 void drawStringInTodoTextfield(GC *textGC, GC *wordLimitIndicator_gc, char *string, int len);
 void drawWordLimitIndicator(GC *gc,int len, int win_width, int win_height);
 int calculate_average_char_width(XFontStruct *font_info);
+
 Display *display;
 int screen_num;
 int display_width, display_height;
@@ -70,6 +71,9 @@ int warningColorSet = 0;
 int db_primary_key;
 int todo_count;
 int todo_win_y_offset = 0;
+int first_window_y_offset = 0;
+int last_window_y_offset = 0;
+
 // TODOWinArray todoWinArr;
 /*
 void initTODOWinArray(TODOWinArray *arr, int initialCapacity){
@@ -151,6 +155,7 @@ void populateTodoItems(){
 				datatable = (TodoItem *)malloc(sizeof(TodoItem));
 				datatable_cursor = datatable;
 				datatable_firstitem = datatable;
+				first_window_y_offset = prevHeight+5;
 			}
 			datatable->win = win;
 			datatable->id = sqlite3_column_int(stmt, 0);
@@ -171,6 +176,7 @@ void populateTodoItems(){
 				next = (TodoItem *)malloc(sizeof(TodoItem));
 			}else{
 				next = NULL;
+				last_window_y_offset = prevHeight+5;
 			}
 			datatable->next = next;
 			datatable = datatable->next;
@@ -178,7 +184,7 @@ void populateTodoItems(){
 
 		}
 	}
-
+	
 
 /*
 	//
@@ -410,8 +416,9 @@ void start_event_loop(){
 	XComposeStatus compose;
 	int count;
 	int strlength = 0;
-	GC submitbtn_gc, textGC, wordLimitIndicator_gc;
-
+	GC submitbtn_gc, textGC, wordLimitIndicator_gc, todowin_gc;
+	todowin_gc = XCreateGC(display, root_win, 0, NULL);
+	XSetFont(display, todowin_gc, font_info->fid);
  	//XSetInputFocus(display, RootWindow(display, DefaultScreen(display)), RevertToParent, CurrentTime);
 	while(1){
 		XNextEvent(display, &report);
@@ -454,27 +461,15 @@ void start_event_loop(){
 			if(report.xexpose.window == todoinput_textfield){
 				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlength);
 			}
-			// for(int i=0; i<todoWinArr.size;i++){
-			// 	if(report.xexpose.window == todoWinArr.windows[i]){
-			// 		//GC gc;
-			// 		//gc = XCreateGC(display, root_win, 0, NULL);
-			// 		//XSetFont(display, gc, font_info->fid);
-
-			// 		sqlite3_stmt *stmt;
-			// 		if( sqlite3_prepare_v2(db, "SELECT * FROM TODOTABLE", -1, &stmt, NULL) != SQLITE_OK){
-			// 			fprintf(stderr, "DB (error): Failed to fetch data: %s\n", sqlite3_errmsg(db));
-			// 			sqlite3_finalize(stmt);
-			// 			exit(-1);
-			// 		}
-
-			// 		char *data = (char *)sqlite3_column_text(stmt, 1);
-			// 		int length = strlen(data);
-
-			// 		draw_string_on_window(&todoWinArr.windows[i], &textGC, 5, -1, data, length);
-			// 		//XFreeGC();
-			// 	}
-
-			// }
+			for(int i=0; i<todo_count; i++){
+				if(report.xexpose.window == datatable_cursor->win){
+					draw_string_on_window(&datatable_cursor->win, &todowin_gc, 5, -1, datatable_cursor->data, datatable_cursor->datalen);
+					//XFreeGC(display, todowin_gc);
+				}
+				datatable_cursor = datatable_cursor->next;
+			}
+			datatable_cursor = datatable_firstitem;;
+			
 			break;
 		case ButtonPress:
 			if(report.xbutton.window == addbtn_win){
@@ -518,23 +513,28 @@ void start_event_loop(){
 					// SCROLL UP EVENT
 					isTODOListScrolling = 1;
 					todo_win_y_offset += 2;
+						
 					for(int i=0; i<todo_count; i++){
 						XGetWindowAttributes(display, datatable_cursor->win, &win_attr);
 						XMoveWindow(display, datatable_cursor->win, 5, win_attr.y + todo_win_y_offset);
 						datatable_cursor = datatable_cursor->next;
 					}
+
 					datatable_cursor = datatable_firstitem;;
+					
 				}
 
 				if(report.xbutton.button == 5){
 					// SCROLL DOWN EVENT
 					isTODOListScrolling = 1;
 					todo_win_y_offset += 2;
+
 					for(int i=0; i<todo_count; i++){
 						XGetWindowAttributes(display, datatable_cursor->win, &win_attr);
 						XMoveWindow(display, datatable_cursor->win, 5, win_attr.y - todo_win_y_offset);
 						datatable_cursor = datatable_cursor->next;
 					}
+					
 					datatable_cursor = datatable_firstitem;;
 				}
 			}
@@ -751,7 +751,7 @@ void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int 
 		}
 	}
 	if(y == -1)
-		y_offset = (win_attr.height-(font_height*lines_needed+10))/2 + font_height;
+		y_offset = (win_attr.height-(font_height*lines_needed))/2 + font_height;
 
 
 	for(int i=0;i<lines_needed;i++){
