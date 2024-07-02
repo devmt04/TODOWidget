@@ -53,6 +53,7 @@ int isTODOListScrolling = 0;
 TodoItem *datatable = NULL;
 TodoItem *datatable_cursor;
 TodoItem *datatable_firstitem;
+TodoItem *datatable_lastitem;
 /*
 typedef struct {
 	Window *windows;
@@ -74,48 +75,58 @@ int todo_win_y_offset = 0;
 int first_window_y_offset = 0;
 int last_window_y_offset = 0;
 
-// TODOWinArray todoWinArr;
-/*
-void initTODOWinArray(TODOWinArray *arr, int initialCapacity){
-	//datatable = (TODODataTable *)malloc(sizeof(TODODataTable));
-	arr->windows = (Window *)malloc(initialCapacity * sizeof(Window));
-	arr->size = 0;
-	arr->capacity = initialCapacity;
-	
+
+void createTodoItem(TodoItem *cursor, char *data, char *date, int datalen, int id){
+	int root_width = 250;
+	int root_height = 150;
+
+	cursor->next = (TodoItem *)malloc(sizeof(TodoItem));
+	cursor->next->data = (char *)malloc(datalen+1);
+	cursor->next->date = (char *)malloc(9);
+	strcpy(cursor->next->data, data);
+	strcpy(cursor->next->date, date);
+	cursor->next->id = id;
+	cursor->next->datalen = datalen;
+	cursor->next->next = NULL;
+
+	int avilable_width = (root_width - 15);
+	int font_height = font_info->ascent + font_info->descent;
+	int text_width = XTextWidth(font_info, data, datalen);
+	int lines_needed = ((text_width % avilable_width) == 0)?text_width / avilable_width :(text_width / avilable_width) + 1;
+	int currentHeight = (font_height*lines_needed)+font_height;
+
+	XWindowAttributes win_attr;
+	XGetWindowAttributes(display, cursor->win, &win_attr);
+
+	int prevHeight = win_attr.y + win_attr.height + 5;
+   	Window win = XCreateSimpleWindow(display, root_win, 5, prevHeight+5, (root_width - 15), currentHeight, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
+	XSelectInput(display, win, ExposureMask);
+	XMapWindow(display, win);
+
+	datatable_lastitem = cursor->next;
 }
 
-void addInTODOWinArray(TODOWinArray *arr, Window win){
-	if(arr->size == arr->capacity){
-		arr->capacity *= 2;
-		arr->windows = (Window *)realloc(arr->windows, arr->capacity * sizeof(Window));
-	}
-	arr->windows[arr->size++] = win;
+void freeTodoItem(TodoItem *item) {
+    if (item) {
+        if (item->data) {
+            free(item->data);
+        }
+        if (item->date) {
+            free(item->date);
+        }
+        XUnmapWindow(display, item->win);
+        free(item);
+    }
 }
+void unmapTodoItems(){
+    TodoItem *current = datatable_firstitem;
+    TodoItem *next;
 
-void freeWindowArray(TODOWinArray *arr) {
-    free(arr->windows);
-    arr->windows = NULL;
-    arr->size = 0;
-    arr->capacity = 0;
-}
-*/
-int loadDatabase(){
-	int size = 0;
-	sqlite3_stmt *stmt;
-	if( sqlite3_prepare_v2(db, "SELECT * FROM TODOTABLE", -1, &stmt, NULL) != SQLITE_OK){
-		fprintf(stderr, "DB (error): Failed to fetch data: %s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		exit(-1);
-	}
-
-	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		char *data = (char *)sqlite3_column_text(stmt, 1);
-		int length = strlen(data);
-
-
-	}
-
-	return size;
+    while (current != NULL) {
+        next = current->next;
+        freeTodoItem(current);
+        current = next;
+    }
 }
 
 void populateTodoItems(){
@@ -177,6 +188,7 @@ void populateTodoItems(){
 			}else{
 				next = NULL;
 				last_window_y_offset = prevHeight+5;
+				datatable_lastitem = datatable;
 			}
 			datatable->next = next;
 			datatable = datatable->next;
@@ -221,7 +233,7 @@ int main(int argc, char **argv){
 
 	todo_count = fetch_todo_count(&db);
 
-	
+	printf("%d---\n", db_primary_key);
 
 	//initTODOWinArray(&todoWinArr, 5);
 	open_display();
@@ -422,7 +434,7 @@ void start_event_loop(){
  	//XSetInputFocus(display, RootWindow(display, DefaultScreen(display)), RevertToParent, CurrentTime);
 	while(1){
 		XNextEvent(display, &report);
-
+		
 		if(!isTODOListScrolling){
 			isTODOListScrolling = 0;
 		}
@@ -461,7 +473,12 @@ void start_event_loop(){
 			if(report.xexpose.window == todoinput_textfield){
 				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlength);
 			}
+			if(report.xexpose.window == todoinput_submit_btn){
+				XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
+				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 15) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+			}
 			for(int i=0; i<todo_count; i++){
+			
 				if(report.xexpose.window == datatable_cursor->win){
 					draw_string_on_window(&datatable_cursor->win, &todowin_gc, 5, -1, datatable_cursor->data, datatable_cursor->datalen);
 					//XFreeGC(display, todowin_gc);
@@ -469,7 +486,6 @@ void start_event_loop(){
 				datatable_cursor = datatable_cursor->next;
 			}
 			datatable_cursor = datatable_firstitem;;
-			
 			break;
 		case ButtonPress:
 			if(report.xbutton.window == addbtn_win){
@@ -507,7 +523,6 @@ void start_event_loop(){
 				}
 			}
 			if(report.xbutton.window == root_win){
-				
 				XWindowAttributes win_attr;
 				if(report.xbutton.button == 4){
 					// SCROLL UP EVENT
@@ -519,11 +534,8 @@ void start_event_loop(){
 						XMoveWindow(display, datatable_cursor->win, 5, win_attr.y + todo_win_y_offset);
 						datatable_cursor = datatable_cursor->next;
 					}
-
 					datatable_cursor = datatable_firstitem;;
-					
 				}
-
 				if(report.xbutton.button == 5){
 					// SCROLL DOWN EVENT
 					isTODOListScrolling = 1;
@@ -533,8 +545,7 @@ void start_event_loop(){
 						XGetWindowAttributes(display, datatable_cursor->win, &win_attr);
 						XMoveWindow(display, datatable_cursor->win, 5, win_attr.y - todo_win_y_offset);
 						datatable_cursor = datatable_cursor->next;
-					}
-					
+					}	
 					datatable_cursor = datatable_firstitem;;
 				}
 			}
@@ -551,18 +562,23 @@ void start_event_loop(){
 					if(!insert_into_todotable(&db, db_primary_key,string)) exit(0);
 					
 					db_primary_key++;
+					//createTodoItem(datatable_lastitem, string, "10-12-23", strlength, db_primary_key);
 					todo_count = fetch_todo_count(&db);
-
-					memset(string, 0, sizeof(string));
+					memset(string, 0, strlength);
 					strlength = 0;
 					XUnmapWindow(display, todoinput_win);
 					XFreeGC(display, textGC);
 					XFreeGC(display, submitbtn_gc);
 					XFreeGC(display, wordLimitIndicator_gc);
+
+					unmapTodoItems();
+					populateTodoItems();
+
 				}else{
 					printf("Nothing to SUBMIT!\n");
 				}
 			}
+			break;
 		case KeyPress:
 			if(report.xkey.window == todoinput_textfield){
 				//printf("%d\n", strlen(string));

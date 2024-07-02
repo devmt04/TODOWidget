@@ -93,6 +93,7 @@ int is_table_exists(sqlite3 **db){
 }
 
 int insert_into_todotable(sqlite3 **db, int id, char *string){
+	printf("FROM\n%s\n", string);
 	char *errmsg = 0;
 	// char *sql = "INSERT INTO TODOTABLE VALUES(0,'Hello world', '10-12-23');"\
 	// 			"INSERT INTO TODOTABLE VALUES(1,'Hello world 2 ', '11-12-23');";
@@ -103,10 +104,13 @@ int insert_into_todotable(sqlite3 **db, int id, char *string){
 	if(sqlite3_exec(*db, sql, NULL, 0, &errmsg) != SQLITE_OK){
 		fprintf(stderr, "DB (error): SQL error: %s\n", errmsg);
 		sqlite3_free(errmsg);
+		free(sql);
 		return 0;
 	}else {
         fprintf(stderr, "DB: Records created successfully\n");
     }
+    free(sql);
+    return 1;
 }
 
 
