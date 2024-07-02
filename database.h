@@ -9,3 +9,4 @@ int fetch_todo_count(sqlite3 **db);
 void close_db(sqlite3 **db);
 
 #endif
+

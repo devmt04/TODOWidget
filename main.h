@@ -8,3 +8,13 @@ typedef struct {
     unsigned long status;
 } MotifWmHints;
 
+
+typedef struct TodoItem{
+    Window win;
+    int id;
+    char *data;
+    int datalen;
+    char *date;
+    struct TodoItem *prev;
+    struct TodoItem *next;
+} TodoItem;

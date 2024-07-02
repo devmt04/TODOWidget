@@ -34,7 +34,7 @@ void drawAddNewBtn();
 void drawTodoInputExitBtn();
 void drawStringInTodoTextfield(GC *textGC, GC *wordLimitIndicator_gc, char *string, int len);
 void drawWordLimitIndicator(GC *gc,int len, int win_width, int win_height);
-
+int calculate_average_char_width(XFontStruct *font_info);
 Display *display;
 int screen_num;
 int display_width, display_height;
@@ -47,24 +47,37 @@ XColor warningred;
 XFontStruct *font_info;
 
 Window root_win, initialmsg_window, addbtn_win, todoinput_win, todoinputwin_exit_btn, todoinput_textfield, todoinput_submit_btn;
+int isTODOListScrolling = 0;
 
+TodoItem *datatable = NULL;
+TodoItem *datatable_cursor;
+TodoItem *datatable_firstitem;
+/*
 typedef struct {
 	Window *windows;
 	int size;
 	int capacity;
 } TODOWinArray;
 
+typedef struct {
+	char *data;
+	int size;
+} TODOData;
+*/
+
 int isInitialWindowMapped = 0;
 int warningColorSet = 0;
 int db_primary_key;
 int todo_count;
-
-TODOWinArray todoWinArr;
-
+int todo_win_y_offset = 0;
+// TODOWinArray todoWinArr;
+/*
 void initTODOWinArray(TODOWinArray *arr, int initialCapacity){
+	//datatable = (TODODataTable *)malloc(sizeof(TODODataTable));
 	arr->windows = (Window *)malloc(initialCapacity * sizeof(Window));
 	arr->size = 0;
 	arr->capacity = initialCapacity;
+	
 }
 
 void addInTODOWinArray(TODOWinArray *arr, Window win){
@@ -81,40 +94,147 @@ void freeWindowArray(TODOWinArray *arr) {
     arr->size = 0;
     arr->capacity = 0;
 }
+*/
+int loadDatabase(){
+	int size = 0;
+	sqlite3_stmt *stmt;
+	if( sqlite3_prepare_v2(db, "SELECT * FROM TODOTABLE", -1, &stmt, NULL) != SQLITE_OK){
+		fprintf(stderr, "DB (error): Failed to fetch data: %s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		exit(-1);
+	}
 
-void drawTodoListWin(){
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		char *data = (char *)sqlite3_column_text(stmt, 1);
+		int length = strlen(data);
+
+
+	}
+
+	return size;
+}
+
+void populateTodoItems(){
 	int root_width = 250;
 	int root_height = 150;
 
-	for(int i=0; i<fetch_todo_count(&db); i++){		
-		Window win = XCreateSimpleWindow(display, root_win, 5, 5+((35+5)*i), (root_width - 15), 35, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
-		addInTODOWinArray(&todoWinArr, win);
-		XMapWindow(display, win);
+	sqlite3_stmt *stmt;
+	if( sqlite3_prepare_v2(db, "SELECT * FROM TODOTABLE", -1, &stmt, NULL) != SQLITE_OK){
+		fprintf(stderr, "DB (error): Failed to fetch data: %s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		exit(-1);
+	}
+
+	int prevHeight = 0;
+	int currentHeight = 0;
+
+	int font_height = font_info->ascent + font_info->descent;
+	int avilable_width = (root_width - 15);
+
+	TodoItem *prev = NULL;
+	TodoItem *next = NULL;
+
+	for(int i=0; i<todo_count; i++){
+		if(sqlite3_step(stmt) == SQLITE_ROW){
+			char *data = (char *)sqlite3_column_text(stmt, 1);
+			int length = strlen(data);
+			
+			int text_width = XTextWidth(font_info, data, length);
+			int lines_needed = ((text_width % avilable_width) == 0)?text_width / avilable_width :(text_width / avilable_width) + 1;
+			currentHeight = (font_height*lines_needed)+font_height;
+
+		   	Window win = XCreateSimpleWindow(display, root_win, 5, prevHeight+5, (root_width - 15), currentHeight, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
+			XSelectInput(display, win, ExposureMask);
+			XMapWindow(display, win);
+
+			if(i == 0){ 
+				datatable = (TodoItem *)malloc(sizeof(TodoItem));
+				datatable_cursor = datatable;
+				datatable_firstitem = datatable;
+			}
+			datatable->win = win;
+			datatable->id = sqlite3_column_int(stmt, 0);
+			
+
+			datatable->data = (char *)malloc(length+1);
+			if(datatable->data) strcpy(datatable->data, data);
+
+			datatable->datalen = length;
+
+			datatable->date = (char *)malloc(9); 
+			if(datatable->date) strcpy(datatable->date, sqlite3_column_text(stmt, 2));
+
+			datatable->prev = prev;
+			prev = datatable;
+			
+			if(i+1 != todo_count){
+				next = (TodoItem *)malloc(sizeof(TodoItem));
+			}else{
+				next = NULL;
+			}
+			datatable->next = next;
+			datatable = datatable->next;
+			prevHeight += currentHeight + 5;
+
+		}
 	}
 
 
-	//fetch_all_from_table();
+/*
+	//
+ 	printf("%d | %s | %s \n", 
+	           sqlite3_column_int(stmt, 0), 
+	           sqlite3_column_text(stmt, 1), 
+	           sqlite3_column_text(stmt, 2));
+
+		//GC gc;
+	//gc = XCreateGC(display, root_win, 0, NULL);
+	//XSetFont(display, gc, font_info->fid);
+
+	//int font_height = font_info->ascent + font_info->descent;
+	//int avilable_width = (root_width - 15) ;
+
+	//char *data = (char *)sqlite3_column_text(stmt, 1);
+	//int length = strlen(data);
+
+	//int text_width = XTextWidth(font_info, data, length);
+	//int lines_needed = ((text_width % avilable_width) == 0)?text_width / avilable_width :(text_width / avilable_width) + 1;
+	
+	//currentHeight = (font_height*lines_needed)+font_height;
+	//draw_string_on_window(&win, &gc, 5, -1, data, length);
+
+	//addInTODOWinArray(&todoWinArr, win);
+	//XFreeGC(display, gc);
+	//sqlite3_finalize(stmt);
+	*/
 }
 
 int main(int argc, char **argv){
 	progname = argv[0];
 	db_primary_key = prepare_database(&db);
+
 	todo_count = fetch_todo_count(&db);
+
 	
-	initTODOWinArray(&todoWinArr, 5);
-	
+
+	//initTODOWinArray(&todoWinArr, 5);
 	open_display();
 
-	// Loading fonts
-	char *fontname = "9x15";
+	// Loading font, to see list of fonts $ xlsfonts in terminal
+	
+	char *fontname = "-b&h-lucida-medium-r-normal-sans-12-120-75-75-p-71-iso8859-1";
 	if((font_info = XLoadQueryFont(display, fontname)) == NULL ){
-		printf("Error loading 9x15 fonts\nexiting...\n");
+		printf("Error loading fonts\nexiting...\n");
 		exit(-1);
 	}
 
 	alloc_colors();
 	createAndMap_root_window(argc, argv);
 	createInitialMsgWindow();
+	
+	// MAP ALL WINDOWS ONCE, AND DRAW ONLY TO EXPOSED AREA
+	populateTodoItems();
+
 	start_event_loop();
 	close_db(&db);
 	XCloseDisplay(display);
@@ -158,7 +278,6 @@ void alloc_colors(){
 }
 
 void createAndMap_root_window(int argc, char **argv){
-	
 	// Creating Root Window
 	int root_x, root_y, root_width, root_height;
 	root_width = 250;
@@ -239,10 +358,11 @@ void createAndMap_root_window(int argc, char **argv){
 
 	// Selecting Types of Input for Root Window
 	
-	XSelectInput(display, root_win, ExposureMask);
+	XSelectInput(display, root_win, ExposureMask | ButtonPressMask);
 	XSelectInput(display, addbtn_win, ExposureMask | ButtonPressMask);
 	
 	XMapWindow(display, root_win);
+
 	XMapWindow(display, addbtn_win);
 
 	todoinput_win = XCreateSimpleWindow(display, root_win, (root_width - (root_width -35))/2, (root_height - (root_height -35))/2, root_width - 35, root_height - 35, 3, BlackPixel(display, screen_num), addnewbtncolor.pixel);
@@ -291,17 +411,22 @@ void start_event_loop(){
 	int count;
 	int strlength = 0;
 	GC submitbtn_gc, textGC, wordLimitIndicator_gc;
-	printf("%d-----\n", isInitialWindowMapped);
 
  	//XSetInputFocus(display, RootWindow(display, DefaultScreen(display)), RevertToParent, CurrentTime);
 	while(1){
 		XNextEvent(display, &report);
+
+		if(!isTODOListScrolling){
+			isTODOListScrolling = 0;
+		}
+
 		switch(report.type){
 		case Expose:
 			
 			if(report.xexpose.count!=0)
 				break;
 			if(report.xexpose.window == root_win){
+
 				if(todo_count == 0){
 					/* Display simple text msg */
 					if(isInitialWindowMapped == 0){
@@ -312,7 +437,11 @@ void start_event_loop(){
 						drawInitialMsgString();
 					}
 				}else{
-					drawTodoListWin();
+					/*
+					if(!isTODOListScrolling){
+					}
+					*/
+
 				}
 				XRaiseWindow(display, addbtn_win);
 			}
@@ -325,9 +454,27 @@ void start_event_loop(){
 			if(report.xexpose.window == todoinput_textfield){
 				drawStringInTodoTextfield(&textGC, &wordLimitIndicator_gc, string, strlength);
 			}
-			if(report.xexpose.window == todoinput_submit_btn){
-				XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
-			}
+			// for(int i=0; i<todoWinArr.size;i++){
+			// 	if(report.xexpose.window == todoWinArr.windows[i]){
+			// 		//GC gc;
+			// 		//gc = XCreateGC(display, root_win, 0, NULL);
+			// 		//XSetFont(display, gc, font_info->fid);
+
+			// 		sqlite3_stmt *stmt;
+			// 		if( sqlite3_prepare_v2(db, "SELECT * FROM TODOTABLE", -1, &stmt, NULL) != SQLITE_OK){
+			// 			fprintf(stderr, "DB (error): Failed to fetch data: %s\n", sqlite3_errmsg(db));
+			// 			sqlite3_finalize(stmt);
+			// 			exit(-1);
+			// 		}
+
+			// 		char *data = (char *)sqlite3_column_text(stmt, 1);
+			// 		int length = strlen(data);
+
+			// 		draw_string_on_window(&todoWinArr.windows[i], &textGC, 5, -1, data, length);
+			// 		//XFreeGC();
+			// 	}
+
+			// }
 			break;
 		case ButtonPress:
 			if(report.xbutton.window == addbtn_win){
@@ -337,7 +484,9 @@ void start_event_loop(){
 
 				submitbtn_gc = XCreateGC(display, todoinput_submit_btn, (long)0, NULL);
 				wordLimitIndicator_gc =  XCreateGC(display, todoinput_textfield, (long)0, NULL);
-
+				XSetFont(display, wordLimitIndicator_gc, font_info->fid);
+				XSetFont(display, submitbtn_gc, font_info->fid);
+				XSetFont(display, textGC, font_info->fid);
 
 				XMapWindow(display, todoinput_win);
 				XMapWindow(display, todoinputwin_exit_btn);
@@ -359,7 +508,34 @@ void start_event_loop(){
 				if(strlength){
 					XSetWindowBackground(display, todoinput_submit_btn, WhitePixel(display, screen_num));
 					XClearWindow(display, todoinput_submit_btn);
-					XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+					XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 15) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+				}
+			}
+			if(report.xbutton.window == root_win){
+				
+				XWindowAttributes win_attr;
+				if(report.xbutton.button == 4){
+					// SCROLL UP EVENT
+					isTODOListScrolling = 1;
+					todo_win_y_offset += 2;
+					for(int i=0; i<todo_count; i++){
+						XGetWindowAttributes(display, datatable_cursor->win, &win_attr);
+						XMoveWindow(display, datatable_cursor->win, 5, win_attr.y + todo_win_y_offset);
+						datatable_cursor = datatable_cursor->next;
+					}
+					datatable_cursor = datatable_firstitem;;
+				}
+
+				if(report.xbutton.button == 5){
+					// SCROLL DOWN EVENT
+					isTODOListScrolling = 1;
+					todo_win_y_offset += 2;
+					for(int i=0; i<todo_count; i++){
+						XGetWindowAttributes(display, datatable_cursor->win, &win_attr);
+						XMoveWindow(display, datatable_cursor->win, 5, win_attr.y - todo_win_y_offset);
+						datatable_cursor = datatable_cursor->next;
+					}
+					datatable_cursor = datatable_firstitem;;
 				}
 			}
 			break;
@@ -368,7 +544,8 @@ void start_event_loop(){
 				if(strlength){
 					XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
 					XClearWindow(display, todoinput_submit_btn);
-					XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 30) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
+					// XTextWidth(font_info, "Submit", 6) + 15   25
+					XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 15) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
 
 					// LATER HANDLE THE DATA INSERTION IN PARALLEL TO IMPROVE PERFORMANCE
 					if(!insert_into_todotable(&db, db_primary_key,string)) exit(0);
@@ -471,7 +648,7 @@ void drawWordLimitIndicator(GC *gc,int len, int win_width, int win_height){
 	sprintf(int_buf, "%d", len);
 	char buf[5]="/100";
 	strcat(int_buf, buf);
-	XDrawString(display, todoinput_textfield, *gc, win_width- XTextWidth(font_info, "100/100", 7) + 18, win_height - 5, int_buf, strlen(int_buf));
+	XDrawString(display, todoinput_textfield, *gc, win_width- XTextWidth(font_info, "100/100", 7) , win_height - 5, int_buf, strlen(int_buf));
 }
 
 void drawTodoInputExitBtn(){
@@ -540,6 +717,13 @@ void drawInitialMsgString(){
 	XFreeGC(display, gc);
 }
 
+int calculate_average_char_width(XFontStruct *font_info) {
+    char sample_text[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    int sample_text_length = strlen(sample_text);
+    int sample_text_width = XTextWidth(font_info, sample_text, sample_text_length);
+    return sample_text_width / sample_text_length;
+}
+
 void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int strlength){
 	/* IF x : -1, draw on x-center of window
 	   IF y : -1, draw on y-center of window*/
@@ -547,12 +731,13 @@ void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int 
 	XGetWindowAttributes(display, *win, &win_attr);
 
 	int avilable_width = win_attr.width - x ;
+	
 	int text_width = XTextWidth(font_info, string, strlength);
-	int max_chars_per_line = avilable_width / XTextWidth(font_info, "M", 1); // assuming "M" is widest charcter
-	char *buff = (char *)malloc(max_chars_per_line+1);
+	int max_chars_per_line = avilable_width / calculate_average_char_width(font_info); // assuming "M" is widest charcter
 	int font_height = font_info->ascent + font_info->descent;
-
 	int lines_needed = ((text_width % avilable_width) == 0)?text_width / avilable_width :(text_width / avilable_width) + 1;
+	//int lines_needed = ((strlength % max_chars_per_line) == 0) ? strlength / max_chars_per_line : (strlength / max_chars_per_line) + 1;
+	char *buff = (char *)malloc(max_chars_per_line+1);
 
 	int x_offset =  x;
 	int y_offset = y;
@@ -568,17 +753,15 @@ void draw_string_on_window(Window *win, GC *gc, int x, int y, char *string, int 
 	if(y == -1)
 		y_offset = (win_attr.height-(font_height*lines_needed+10))/2 + font_height;
 
-	int _strlen = 0;
-
-	// THIS FUNTION NEEDS TO BE REVISED
 
 	for(int i=0;i<lines_needed;i++){
 		int len = snprintf(buff, max_chars_per_line + 1, "%s", string + i * max_chars_per_line);
-		printf("%s\n", buff);
-		XDrawString(display, *win, *gc, x_offset, y_offset + i * (font_info->ascent + font_info->descent), buff, len);
+		XDrawString(display, *win, *gc, x_offset, y_offset + i * (font_info->ascent + font_info->descent), buff, strlen(buff));
 	}
 
 /*
+	int _strlen = 0;
+
 	for(int i=0;i<lines_needed;i++){
 		for(int j =0; j<strlength; j++){
 			buff[j] = string[j + _strlen ];
