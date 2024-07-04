@@ -60,8 +60,9 @@ TodoItem *datatable_lastitem = NULL;
 
 FT_Library ft_library;
 
-XftFont *xft_font_10; // font of size 10
+XftFont *xft_font_10, *xft_font_8; // font of size 10, 8
 XftColor xft_color_black; // #000000FF
+XftColor xft_color_wordindicator;
 
 XColor bgcolor; // #747474
 XColor tilecolor; // #C8B4B4
@@ -221,7 +222,7 @@ int main(int argc, char **argv){
 	// Loading font, to see list of fonts $ xlsfonts in terminal
 	// to convert TTF to .h format: $ xxd -i SourceCodePro-Regular.ttf > source_code_pro.h
 	// -b&h-lucida-medium-r-normal-sans-12-120-75-75-p-71-iso8859-1
-	
+	// BELOW IS BITMAPPED BASED FONT
 	/*
 	char *fontname = "-adobe-helvetica-medium-r-normal--14-140-75-75-p-77-iso8859-1";
 	if((font_info = XLoadQueryFont(display, fontname)) == NULL ){
@@ -233,7 +234,9 @@ int main(int argc, char **argv){
     visual = DefaultVisual(display, screen_num);
     colormap = DefaultColormap(display, screen_num);
 
+    // CURRENTLY USING MONO SPACED FONT
     load_ttf_font();
+
 	alloc_colors();
 	createAndMap_root_window(argc, argv);
 	createInitialMsgWindow();
@@ -286,10 +289,18 @@ void alloc_colors(){
 		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
 		exit(-1);
 	}
+	if(!alloc_xftcolor_from_hex(display, visual, colormap, "#000000FF", &xft_color_wordindicator)){
+		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
+		exit(-1);
+	}
 }
 
 void load_ttf_font(){
- 	if (!(xft_font_10 = XftFontOpen(display, screen_num, XFT_FAMILY, XftTypeString, "ubuntu", XFT_SIZE, XftTypeDouble, 10.0, NULL))) {
+ 	if (!(xft_font_10 = XftFontOpen(display, screen_num, XFT_FAMILY, XftTypeString, "Source Code Pro", XFT_SIZE, XftTypeDouble, 10.0, NULL))) {
+        fprintf(stderr, "Failed to load font\n");
+        return;
+    }
+    if (!(xft_font_8 = XftFontOpen(display, screen_num, XFT_FAMILY, XftTypeString, "Source Code Pro", XFT_SIZE, XftTypeDouble, 8.0, NULL))) {
         fprintf(stderr, "Failed to load font\n");
         return;
     }
@@ -420,7 +431,7 @@ void start_event_loop(){
 	XftTextExtentsUtf8(display, xft_font_10, (const FcChar8 *)"Submit", 6, &str_submit_width_extents);
 
 	int font_height_10 =  xft_font_10->ascent + xft_font_10->descent;
-	int STR_SUBMIT_WIDTH = ((str_submit_width_extents.xOff + 15) - str_submit_width_extents.xOff)/2;
+	int SUBMIT_BTN_TEXT_X = ((str_submit_width_extents.xOff + 15) - str_submit_width_extents.xOff)/2;
 	int SUBMIT_BTN_TEXT_Y = (25 - (font_height_10))/2 + xft_font_10->ascent;
 	/*
 	GC submitbtn_gc, textGC, wordLimitIndicator_gc, todowin_gc;
@@ -474,7 +485,7 @@ void start_event_loop(){
 			if(report.xexpose.window == todoinput_submit_btn){
 				XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
 				XftDraw *xft_draw = XftDrawCreate(display, todoinput_submit_btn, visual, colormap);
-				XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, ((STR_SUBMIT_WIDTH + 15) - STR_SUBMIT_WIDTH)/2,  SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
+				XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, SUBMIT_BTN_TEXT_X ,  SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
 				XftDrawDestroy(xft_draw);
 				// XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 15) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
 			}
@@ -526,7 +537,7 @@ void start_event_loop(){
 					XClearWindow(display, todoinput_submit_btn);
 					
 					XftDraw *xft_draw = XftDrawCreate(display, todoinput_submit_btn, visual, colormap);
-    				XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, ((STR_SUBMIT_WIDTH + 15) - STR_SUBMIT_WIDTH)/2,  SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
+    				XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, SUBMIT_BTN_TEXT_X, SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
 					
 					XftDrawDestroy(xft_draw);
 					//XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 15) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
@@ -573,7 +584,7 @@ void start_event_loop(){
 					// XTextWidth(font_info, "Submit", 6) + 15   25
 					 //XDrawString(display, todoinput_submit_btn, submitbtn_gc, ((XTextWidth(font_info, "Submit", 6) + 15) - XTextWidth(font_info, "Submit", 6))/2, (25 - (font_info->ascent + font_info->descent))/2 + font_info->ascent, "Submit", 6);
 				     XftDraw *xft_draw = XftDrawCreate(display, todoinput_submit_btn, visual, colormap);
-					 XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, STR_SUBMIT_WIDTH, SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
+					 XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, SUBMIT_BTN_TEXT_X, SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
 					 XftDrawDestroy(xft_draw);
 
 					// LATER HANDLE THE DATA INSERTION IN PARALLEL TO IMPROVE PERFORMANCE
@@ -658,25 +669,26 @@ void drawStringInTodoTextfield(/*GC *textGC, GC *wordLimitIndicator_gc,*/ char *
 		//XDrawString(display, todoinput_textfield, *textGC, x, y + i * font_height, buff, strlen(buff));
 		XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, x, y + i * font_height, (XftChar8 *)buff, strlen(buff));
 	}
-		// -0------------------------------------------
-		// -0------------------------------------------
-		// -0------------------------------------------
-	// -0------------------------------------------
-	// -0------------------------------------------
+
 	if(length==100){
+		if(!alloc_xftcolor_from_hex(display, visual, colormap, "#FF0000FF", &xft_color_wordindicator)){
+			fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
+			exit(-1);
+		}
 		/*
 		XSetForeground(display, *wordLimitIndicator_gc, warningred.pixel);
 		*/
 		warningColorSet = 1;
 	}
 
-	else if(warningColorSet==1) //XSetForeground(display, *wordLimitIndicator_gc, BlackPixel(display, screen_num));
-	// ----------------------------------------------
-		// -0------------------------------------------
-		// -0------------------------------------------
-		// -0------------------------------------------
-	// -0------------------------------------------
-	// -0------------------------------------------
+	else if(warningColorSet==1){
+		if(!alloc_xftcolor_from_hex(display, visual, colormap, "#000000FF", &xft_color_wordindicator)){
+			fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
+			exit(-1);
+		}
+		//XSetForeground(display, *wordLimitIndicator_gc, BlackPixel(display, screen_num));
+	} 
+
 
 	// drawWordLimitIndicator(wordLimitIndicator_gc, length, win_attr.width, win_attr.height);
 	drawWordLimitIndicator(xft_draw, length, win_attr.width, win_attr.height);
@@ -684,7 +696,6 @@ void drawStringInTodoTextfield(/*GC *textGC, GC *wordLimitIndicator_gc,*/ char *
 	free(buff);
 
 
-	//
 	/*
 	int buff_width = XTextWidth(font_info, buff, strlen(buff));
 	printf("%d\n", buff_width);
@@ -700,11 +711,9 @@ void drawWordLimitIndicator(XftDraw *xft_draw, int len, int win_width, int win_h
 	sprintf(int_buf, "%d", len);
 	char buf[5]="/100";
 	strcat(int_buf, buf);
-
 	XGlyphInfo extents;
-	XftTextExtentsUtf8(display, xft_font_10, (const FcChar8 *)"100/100", 7, &extents);
-
-	XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, win_width- extents.xOff, win_height - 5, (XftChar8 *)int_buf, strlen(int_buf));
+	XftTextExtentsUtf8(display, xft_font_8, (const FcChar8 *)"100/100", 7, &extents);
+	XftDrawStringUtf8(xft_draw, &xft_color_wordindicator, xft_font_8, win_width - extents.xOff - 10, win_height - 5, (XftChar8 *)int_buf, strlen(int_buf));
 	//XDrawString(display, todoinput_textfield, *gc, win_width- XTextWidth(font_info, "100/100", 7) , win_height - 5, int_buf, strlen(int_buf));
 }
 
@@ -788,6 +797,7 @@ void draw_string_on_window(Window *win, int x, int y, char *string, int strlengt
 	XGetWindowAttributes(display, *win, &win_attr);
 
 	int avilable_width = win_attr.width - x - 15;
+	
 	XGlyphInfo extents;
 	XftTextExtentsUtf8(display, xft_font_10, (const FcChar8 *)string, strlen(string), &extents);
 	int text_width = extents.xOff;
@@ -812,34 +822,65 @@ void draw_string_on_window(Window *win, int x, int y, char *string, int strlengt
 	if(y == -1)
 		y_offset = (win_attr.height-(font_height*lines_needed))/2 + font_height;
  	
-
+	
+ 	
  	XftDraw *xft_draw = XftDrawCreate(display, *win, visual, colormap);
 	for(int i=0;i<lines_needed;i++){
 		snprintf(buff, max_chars_per_line + 1, "%s", string + i * max_chars_per_line);
     	XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, x_offset, y_offset + i * font_height, (XftChar8 *)buff, strlen(buff));
 		// XDrawString(display, *win, *gc, x_offset, y_offset + i * (font_info->ascent + font_info->descent), buff, strlen(buff));
 	}
-	XftDrawDestroy(xft_draw);
-
+	
 /*
+	XGlyphInfo extents;
+    const char *start = string;
+    const char *end;
+    int line_height = xft_font_10->ascent + xft_font_10->descent;
+
+    while (*start) {
+        // Find the maximum substring that fits within the window width
+        end = start;
+        while (*end && XftTextExtentsUtf8(NULL, xft_font_10, (XftChar8 *)start, end - start + 1, &extents) , extents.width <= avilable_width) {
+            end++;
+        }
+
+        // Draw the substring that fits
+        XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, x, y, (XftChar8 *)start, end - start);
+
+        // Move to the next line
+        start = end;
+        y += line_height;
+    }
+*/
+
 	// THE BELOW METHOD CALCULATE THE WIDTH OF EVERY CHAR IN BUFFER
 	// THUS BELOW METHOD BETTER TO BE USE WHEN WE ARE WORKING ON
 	// FONTS WITH NOT-FIXED WIDTH
-
+/*
 	int _strlen = 0;
-
+	printf("-->%d\n", strlength);
 	for(int i=0;i<lines_needed;i++){
 		for(int j =0; j<strlength; j++){
 			buff[j] = string[j + _strlen ];
-			if((XTextWidth(font_info, buff, j+1) >= avilable_width) || string[j + _strlen + 1] == '\0'){
-				
+			XGlyphInfo buf_extents_0;
+			XftTextExtentsUtf8(display, xft_font_10, (const FcChar8 *)buff, j+1, &buf_extents_0);
+			int buf_extents_0_width = extents.xOff;
+
+			///if((XTextWidth(font_info, buff, j+1) >= avilable_width) || string[j + _strlen + 1] == '\0'){
+			if((buf_extents_0_width >= avilable_width) || string[j + _strlen + 1] == '\0'){
 				if(x == -1){
 					if(i+1 == lines_needed){
-						x_offset = (win_attr.width - XTextWidth(font_info, buff, strlen(buff))) / 2;
+						XGlyphInfo buf_extents_1;
+						XftTextExtentsUtf8(display, xft_font_10, (const FcChar8 *)buff, strlen(buff), &buf_extents_1);
+						int buf_extents_1_width = extents.xOff;
+
+						x_offset = (win_attr.width - buf_extents_1_width) / 2;
+						//x_offset = (win_attr.width - XTextWidth(font_info, buff, strlen(buff))) / 2;
 					}
 				}
 
-				XDrawString(display, *win, *gc, x_offset, y_offset, buff, strlen(buff));
+				XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, x_offset, y_offset, (XftChar8 *)buff, strlen(buff));
+				//XDrawString(display, *win, *gc, x_offset, y_offset, buff, strlen(buff));
 				y_offset += font_height;
 				memset(buff, '\0', strlen(buff));
 				_strlen += j + 1;
@@ -849,4 +890,5 @@ void draw_string_on_window(Window *win, int x, int y, char *string, int strlengt
 	}
 */
 	free(buff);
+	XftDrawDestroy(xft_draw);
 }
