@@ -3,10 +3,10 @@
 #include <X11/Xos.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/shape.h>
-
-#include <freetype2/ft2build.h>
 #include <X11/Xft/Xft.h>
-#include <fontconfig/fontconfig.h>
+
+#include <X11/extensions/Xcomposite.h>
+#include <X11/extensions/Xrender.h>
 
 #include "main.h"
 #include "utils.h"
@@ -33,7 +33,7 @@ void createAndMap_root_window(int argc, char **argv);
 void start_event_loop();
 void createInitialMsgWindow();
 void drawInitialMsgString();
-void draw_string_on_window(Window *win, int x, int y, char *string, int strlength);
+void draw_string_on_window(Window *win, XftColor color, int x, int y, char *string, int strlength);
 void drawAddNewBtn();
 void drawTodoInputExitBtn();
 void drawStringInTodoTextfield(GC *textfeild_cursor_gc, char *string, int len);
@@ -62,10 +62,11 @@ FT_Library ft_library;
 
 XftFont *xft_font_10, *xft_font_8; // font of size 10, 8
 XftColor xft_color_black; // #000000FF
+XftColor xft_color_tilecolor;
 XftColor xft_color_wordindicator;
 
-XColor bgcolor; // #747474
-XColor tilecolor; // #C8B4B4
+XColor bgcolor; // #333333
+XColor tilecolor; // #B3D1C4
 XColor addnewbtncolor;
 XColor warningred;
 
@@ -167,7 +168,7 @@ void populateTodoItems(){
 			int lines_needed = ((length % max_chars_per_line) == 0) ? length / max_chars_per_line : (length / max_chars_per_line) + 1;
 			currentHeight = (font_height*lines_needed)+font_height;
 
-		   	Window win = XCreateSimpleWindow(display, root_win, 5, prevHeight+5, avilable_width, currentHeight, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
+		   	Window win = XCreateSimpleWindow(display, root_win, 5, prevHeight+5, avilable_width, currentHeight, 1, BlackPixel(display, screen_num), tilecolor.pixel);
 			XSelectInput(display, win, ExposureMask);
 			XMapWindow(display, win);
 
@@ -265,15 +266,15 @@ void open_display(){
 
 void alloc_colors(){
 	// Allocate bgcolor
-	if(!alloc_xcolor_from_hex(display, colormap, "#747474", &bgcolor)){
+	if(!alloc_xcolor_from_hex(display, colormap, "#333333", &bgcolor)){
 		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
 		exit(-1);
 	}
-	if(!alloc_xcolor_from_hex(display, colormap, "#C8B4B4", &tilecolor)){
+	if(!alloc_xcolor_from_hex(display, colormap, "#B3D1C4", &tilecolor)){
 		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
 		exit(-1);
 	}
-	if(!alloc_xcolor_from_hex(display, colormap, "#C8B4B4", &addnewbtncolor)){
+	if(!alloc_xcolor_from_hex(display, colormap, "#D0F0FF", &addnewbtncolor)){
 		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
 		exit(-1);
 	}
@@ -286,6 +287,10 @@ void alloc_colors(){
 		exit(-1);
 	}
 	if(!alloc_xftcolor_from_hex(display, visual, colormap, "#000000FF", &xft_color_wordindicator)){
+		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
+		exit(-1);
+	}
+	if(!alloc_xftcolor_from_hex(display, visual, colormap, "#C5C5C5FF", &xft_color_tilecolor)){
 		fprintf(stderr, "Failed allocating BGColor\nexiting...\n");
 		exit(-1);
 	}
@@ -318,6 +323,66 @@ void createAndMap_root_window(int argc, char **argv){
 	root_x = display_width - root_width - 5;
 	root_y = 8;
 	root_win = XCreateSimpleWindow(display, RootWindow(display, screen_num), root_x, root_y, root_width, root_height, 2, BlackPixel(display, screen_num), bgcolor.pixel);
+/*
+	XRenderPictFormat* pict_format = XRenderFindStandardFormat(display, PictStandardARGB32);
+	if (!pict_format) {
+        fprintf(stderr, "Cannot find PictStandardARGB32 format\n");
+        XCloseDisplay(display);
+        exit(1);
+    }
+
+    XVisualInfo vinfo_template;
+    vinfo_template.screen = screen_num;
+    vinfo_template.depth = 32; // Looking for 32-bit depth visuals
+    vinfo_template.class = TrueColor;
+    int nitems;
+    XVisualInfo* vinfo_list = XGetVisualInfo(display, VisualScreenMask | VisualDepthMask | VisualClassMask, &vinfo_template, &nitems);
+    if (!vinfo_list) {
+        fprintf(stderr, "No matching visual found\n");
+        XCloseDisplay(display);
+       	exit(1);
+    }
+
+    // Select a suitable visual from the list
+    XVisualInfo* vinfo = NULL;
+    for (int i = 0; i < nitems; i++) {
+        if (XRenderFindVisualFormat(display, vinfo_list[i].visual) == pict_format) {
+            vinfo = &vinfo_list[i];
+            break;
+        }
+    }
+
+    if (!vinfo) {
+        fprintf(stderr, "Cannot find suitable visual\n");
+        XFree(vinfo_list);
+        XCloseDisplay(display);
+        exit(1);
+    }
+
+
+    XSetWindowAttributes attrs;
+    attrs.colormap = XCreateColormap(display, RootWindow(display, screen_num), vinfo->visual, AllocNone);
+    attrs.border_pixel = 0;
+    attrs.background_pixel = 0;
+    root_win = XCreateWindow(display, RootWindow(display, screen_num), root_x, root_y, root_width, root_height, 0, vinfo->depth, InputOutput, vinfo->visual,
+                                    CWColormap | CWBorderPixel | CWBackPixel, &attrs);
+
+    int event_base, error_base;
+    if (!XCompositeQueryExtension(display, &event_base, &error_base)) {
+        fprintf(stderr, "Composite extension not available\n");
+        XCloseDisplay(display);
+        exit(1);
+    }
+    XCompositeRedirectWindow(display, root_win, CompositeRedirectAutomatic);
+
+	Picture picture = XRenderCreatePicture(display, root_win, pict_format, 0, NULL);
+	XRenderColor color;
+    color.red = 0;
+    color.green = 0;
+    color.blue = 0;
+    color.alpha = 0x7FFF;
+	XRenderFillRectangle(display, PictOpSrc, picture, &color, 0, 0, root_width, root_height);
+*/
 
 	// Motif Hints for root window : appliying NO DECORATIONS
 	Atom mwmHintsProperty = XInternAtom(display, "_MOTIF_WM_HINTS", False);
@@ -483,10 +548,9 @@ void start_event_loop(){
 				XftDrawDestroy(xft_draw);
 			}
 			for(int i=0; i<todo_count; i++){
-			
 				if(report.xexpose.window == datatable_cursor->win){
 					XClearWindow(display, datatable_cursor->win);
-					draw_string_on_window(&datatable_cursor->win, 5, -1, datatable_cursor->data, datatable_cursor->datalen);
+					draw_string_on_window(&datatable_cursor->win, xft_color_black, 5, -1, datatable_cursor->data, datatable_cursor->datalen);
 				}
 				datatable_cursor = datatable_cursor->next;
 			}
@@ -737,7 +801,7 @@ void createInitialMsgWindow(){
 
 void drawInitialMsgString(){
 	char *initial_msg = "Empty. Try creating one.";
-	draw_string_on_window(&initialmsg_window, -1, -1, initial_msg, strlen(initial_msg));
+	draw_string_on_window(&initialmsg_window, xft_color_tilecolor, -1, -1, initial_msg, strlen(initial_msg));
 }
 
 int calculate_average_char_width(XFontStruct *font_info) {
@@ -749,7 +813,7 @@ int calculate_average_char_width(XFontStruct *font_info) {
     return sample_text_width / sample_text_length;
 }
 
-void draw_string_on_window(Window *win, int x, int y, char *string, int strlength){
+void draw_string_on_window(Window *win, XftColor color,int x, int y, char *string, int strlength){
 	/* IF x : -1, draw on x-center of window
 	   IF y : -1, draw on y-center of window*/
 	XWindowAttributes win_attr;
@@ -776,14 +840,15 @@ void draw_string_on_window(Window *win, int x, int y, char *string, int strlengt
 		}
 	}
 	if(y == -1)
-		y_offset = (win_attr.height-(font_height*lines_needed))/2 + font_height;
+		y_offset = (win_attr.height-(font_height*lines_needed))/2 + xft_font_10->ascent;
  	
 	
  	
  	XftDraw *xft_draw = XftDrawCreate(display, *win, visual, colormap);
 	for(int i=0;i<lines_needed;i++){
 		snprintf(buff, max_chars_per_line + 1, "%s", string + i * max_chars_per_line);
-    	XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, x_offset, y_offset + i * font_height, (XftChar8 *)buff, strlen(buff));
+    	XftDrawStringUtf8(xft_draw, &color, xft_font_10, x_offset, y_offset + i * font_height, (XftChar8 *)buff, strlen(buff));
+		// XDrawString(display, *win, *gc, x_offset, y_offset + i * (font_info->ascent + font_info->descent), buff, strlen(buff));
 	}
 	
 /*

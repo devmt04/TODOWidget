@@ -1,5 +1,4 @@
 #include "utils.h"
-#include <stdio.h>
 
 int alloc_xcolor_from_hex(Display *display, Colormap colormap, const char *hex_color, XColor *xcolor) {
     unsigned int r, g, b;
