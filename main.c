@@ -467,7 +467,7 @@ void createAndMap_root_window(int argc, char **argv){
 	XMapWindow(display, root_win);
 	XMapWindow(display, addbtn_win);
 
-	todoinput_win = XCreateSimpleWindow(display, root_win, (root_width - (root_width -35))/2, (root_height - (root_height -35))/2, root_width - 35, root_height - 35, 3, BlackPixel(display, screen_num), addnewbtncolor.pixel);
+	todoinput_win = XCreateSimpleWindow(display, root_win, (root_width - (root_width -35) - 6)/2, (root_height - (root_height -35) - 6)/2, root_width - 35, root_height - 35, 3, BlackPixel(display, screen_num), addnewbtncolor.pixel);
 	todoinputwin_exit_btn = XCreateSimpleWindow(display, todoinput_win, (root_width - 35) - 15, 5, 10, 10, 0, BlackPixel(display, screen_num), WhitePixel(display, screen_num));
 	todoinput_textfield = XCreateSimpleWindow(display, todoinput_win, 0, 0, (root_width - 35), (root_height - 35)-25, 1, BlackPixel(display, screen_num), addnewbtncolor.pixel);
 	
@@ -557,8 +557,9 @@ void start_event_loop(){
 			if(report.xexpose.window == todoinput_textfield){
 				drawStringInTodoTextfield(&defaultGC, string, strlength);
 				XGrabKeyboard(display, todoinput_textfield, True, GrabModeAsync, GrabModeAsync, CurrentTime);
-				XGrabPointer(display, todoinput_win, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
-				GrabModeAsync, GrabModeAsync, None, None, CurrentTime);				break;
+				//XGrabPointer(display, todoinput_win, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+								//GrabModeAsync, GrabModeAsync, None, None, CurrentTime);				
+				break;
 			}
 			if(report.xexpose.window == todoinput_submit_btn){
 				XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
