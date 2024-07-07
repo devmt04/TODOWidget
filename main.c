@@ -33,7 +33,7 @@ void createAndMap_root_window(int argc, char **argv);
 void start_event_loop();
 void createInitialMsgWindow();
 void drawInitialMsgString();
-void draw_string_on_window(Window *win, XftColor color, int x, int y, char *string, int strlength);
+void draw_string_on_window(Window *win, XftColor color, int x_pad, int x, int y, char *string, int strlength);
 void drawAddNewBtn();
 void drawTodoInputExitBtn();
 void drawStringInTodoTextfield(GC *textfeild_cursor_gc, char *string, int len);
@@ -81,7 +81,6 @@ int todo_win_y_offset = 0;
 int first_window_y_offset = 0;
 int last_window_y_offset = 0;
 
-
 void createTodoItem(TodoItem *cursor, char *data, char *date, int datalen, int id){
 	// NEED TO REVIW
 	int root_width = 250;
@@ -122,18 +121,27 @@ void freeTodoItem(TodoItem *item) {
             free(item->date);
         }
         XUnmapWindow(display, item->win);
+        XDestroyWindow(display, item->win);
         free(item);
     }
 }
-void unmapTodoItems(){
-    TodoItem *current = datatable_firstitem;
-    TodoItem *next;
+void destroyTodoList(){
+	if(datatable_firstitem!=NULL){		
+	    TodoItem *current = datatable_firstitem;
+	    TodoItem *next;
 
-    while (current != NULL) {
-        next = current->next;
-        freeTodoItem(current);
-        current = next;
-    }
+	    while (current != NULL) {
+	        next = current->next;
+	        freeTodoItem(current);
+	        current = next;
+	    }
+	    datatable = NULL;
+		datatable_cursor = NULL;
+		datatable_firstitem = NULL;
+		datatable_lastitem = NULL;
+	}else{
+		printf("NOTHING TO DESTROY\n");
+	}
 }
 
 void populateTodoItems(){
@@ -151,7 +159,8 @@ void populateTodoItems(){
 	int currentHeight = 0;
 
 	int font_height = xft_font_10->ascent + xft_font_10->descent;
-	int avilable_width = (root_width - 15);
+	int currentWidth = (root_width - 15);
+	int avilable_width = (currentWidth - 30);
 
 	TodoItem *prev = NULL;
 	TodoItem *next = NULL;
@@ -168,8 +177,8 @@ void populateTodoItems(){
 			int lines_needed = ((length % max_chars_per_line) == 0) ? length / max_chars_per_line : (length / max_chars_per_line) + 1;
 			currentHeight = (font_height*lines_needed)+font_height;
 
-		   	Window win = XCreateSimpleWindow(display, root_win, 5, prevHeight+5, avilable_width, currentHeight, 1, BlackPixel(display, screen_num), tilecolor.pixel);
-			XSelectInput(display, win, ExposureMask);
+		   	Window win = XCreateSimpleWindow(display, root_win, 5, prevHeight+5, currentWidth, currentHeight, 1, BlackPixel(display, screen_num), tilecolor.pixel);
+			XSelectInput(display, win, ExposureMask | EnterWindowMask | LeaveWindowMask);
 			XMapWindow(display, win);
 
 			if(i == 0){ 
@@ -181,7 +190,6 @@ void populateTodoItems(){
 			datatable->win = win;
 			datatable->id = sqlite3_column_int(stmt, 0);
 			
-
 			datatable->data = (char *)malloc(length+1);
 			if(datatable->data) strcpy(datatable->data, data);
 
@@ -202,7 +210,6 @@ void populateTodoItems(){
 			datatable->next = next;
 			datatable = datatable->next;
 			prevHeight += currentHeight + 5;
-
 		}
 	}
 	last_window_y_offset = prevHeight+5;
@@ -211,9 +218,7 @@ void populateTodoItems(){
 int main(int argc, char **argv){
 	progname = argv[0];
 	db_primary_key = prepare_database(&db);
-
 	todo_count = fetch_todo_count(&db);
-
 	open_display();
 
 	// Loading font, to see list of fonts $ xlsfonts in terminal
@@ -256,6 +261,7 @@ void open_display(){
 		fprintf(stderr, "Error Opening Display\nExiting..\n");
 		exit(-1);
 	}else{
+		printf("%d\n", display);
 		screen_num = DefaultScreen(display);
 		// Get full display width and height
 		display_width = DisplayWidth(display, screen_num);
@@ -389,8 +395,8 @@ void createAndMap_root_window(int argc, char **argv){
 	MotifWmHints hints;
 	hints.flags = MWM_HINTS_DECORATIONS;
 	hints.decorations = 0 ;
-	XChangeProperty(display, root_win, mwmHintsProperty, mwmHintsProperty, 32,
-                   PropModeReplace, (unsigned char *)&hints, sizeof(hints)/4);
+	//XChangeProperty(display, root_win, mwmHintsProperty, mwmHintsProperty, 32,
+                //   PropModeReplace, (unsigned char *)&hints, sizeof(hints)/4);
 
 
 	// Allocating Size Hints
@@ -439,7 +445,6 @@ void createAndMap_root_window(int argc, char **argv){
 
 	XSetWMProperties(display, root_win, &windowName, &iconName, argv, argc, root_size_hints, wm_hints, class_hints);
 
-
 	// Creating a button window to add items in TODO list
 	int btn_x, btn_y, btn_width, btn_height;
 	btn_width = 31;
@@ -460,7 +465,6 @@ void createAndMap_root_window(int argc, char **argv){
 	XSelectInput(display, addbtn_win, ExposureMask | ButtonPressMask);
 	
 	XMapWindow(display, root_win);
-
 	XMapWindow(display, addbtn_win);
 
 	todoinput_win = XCreateSimpleWindow(display, root_win, (root_width - (root_width -35))/2, (root_height - (root_height -35))/2, root_width - 35, root_height - 35, 3, BlackPixel(display, screen_num), addnewbtncolor.pixel);
@@ -492,27 +496,35 @@ void start_event_loop(){
 	XftTextExtentsUtf8(display, xft_font_10, (const FcChar8 *)"Submit", 6, &str_submit_width_extents);
 	
 	XGCValues values;
-	GC textfeild_cursor_gc;
+	GC defaultGC;
+	defaultGC = XCreateGC(display, todoinput_textfield, 0, &values);
+	XSetLineAttributes(display, defaultGC, 2, LineSolid, CapButt, JoinBevel);
 
 	int font_height_10 =  xft_font_10->ascent + xft_font_10->descent;
 	int SUBMIT_BTN_TEXT_X = ((str_submit_width_extents.xOff + 15) - str_submit_width_extents.xOff)/2;
 	int SUBMIT_BTN_TEXT_Y = (25 - (font_height_10))/2 + xft_font_10->ascent;
 
+	Window removeTileBtn = XCreateSimpleWindow(display, root_win, 0, 10, 12, 12, 0, BlackPixel(display, screen_num), tilecolor.pixel);
+	XSelectInput(display, removeTileBtn, ExposureMask | ButtonPressMask);
+	int removeTileBtn_pos = 0;
+
  	//XSetInputFocus(display, RootWindow(display, DefaultScreen(display)), RevertToParent, CurrentTime);
 	while(1){
 		XNextEvent(display, &report);
 		
-		if(!isTODOListScrolling){
+		/*if(!isTODOListScrolling){
 			isTODOListScrolling = 0;
-		}
+		}*/
+		
+		if(!todo_count)
+			XUnmapWindow(display, removeTileBtn);
 
 		switch(report.type){
+
 		case Expose:
-			
 			if(report.xexpose.count!=0)
 				break;
 			if(report.xexpose.window == root_win){
-
 				if(todo_count == 0){
 					/* Display simple text msg */
 					if(isInitialWindowMapped == 0){
@@ -524,71 +536,135 @@ void start_event_loop(){
 					}
 				}else{
 					/*
-					if(!isTODOListScrolling){
-
-					}
+					if(!isTODOListScrolling){}
 					*/
-
 				}
+				XRaiseWindow(display, removeTileBtn);
 				XRaiseWindow(display, addbtn_win);
+				break;
+			}
+			if(report.xexpose.window == removeTileBtn){
+				XDrawLine(display, removeTileBtn, defaultGC, 0, (12+1)/2, 12, (12+1)/2);
 			}
 			if(report.xexpose.window == addbtn_win){
 				drawAddNewBtn();
+				break;
 			}
 			if(report.xexpose.window == todoinput_win){
 				drawTodoInputExitBtn();
+				break;
 			}
 			if(report.xexpose.window == todoinput_textfield){
-				drawStringInTodoTextfield(&textfeild_cursor_gc, string, strlength);
+				drawStringInTodoTextfield(&defaultGC, string, strlength);
+				XGrabKeyboard(display, todoinput_textfield, True, GrabModeAsync, GrabModeAsync, CurrentTime);
+				XGrabPointer(display, todoinput_win, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+				GrabModeAsync, GrabModeAsync, None, None, CurrentTime);				break;
 			}
 			if(report.xexpose.window == todoinput_submit_btn){
 				XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
 				XftDraw *xft_draw = XftDrawCreate(display, todoinput_submit_btn, visual, colormap);
 				XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, SUBMIT_BTN_TEXT_X ,  SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
 				XftDrawDestroy(xft_draw);
+				break;
 			}
 			for(int i=0; i<todo_count; i++){
 				if(report.xexpose.window == datatable_cursor->win){
-					XClearWindow(display, datatable_cursor->win);
-					draw_string_on_window(&datatable_cursor->win, xft_color_black, 5, -1, datatable_cursor->data, datatable_cursor->datalen);
+					XClearWindow(display, report.xexpose.window);
+					draw_string_on_window(&datatable_cursor->win, xft_color_black, 30, 5, -1, datatable_cursor->data, datatable_cursor->datalen);
 				}
 				datatable_cursor = datatable_cursor->next;
 			}
 			datatable_cursor = datatable_firstitem;;
 			break;
-		case ButtonPress:
-			if(report.xbutton.window == addbtn_win){
-				XMapWindow(display, todoinput_win);
-				XMapWindow(display, todoinputwin_exit_btn);
-				XMapWindow(display, todoinput_textfield);
-				XMapWindow(display, todoinput_submit_btn);
-
-				XRaiseWindow(display, todoinput_win);
-				XRaiseWindow(display, todoinput_textfield);
-				XRaiseWindow(display, todoinputwin_exit_btn);
-				XRaiseWindow(display, todoinput_submit_btn);
-				
-				textfeild_cursor_gc = XCreateGC(display, todoinput_textfield, 0, &values);
-			}
-			if(report.xbutton.window == todoinputwin_exit_btn){	
-				XUnmapWindow(display, todoinput_win);
-				XFreeGC(display, textfeild_cursor_gc);
-			}
-			if(report.xbutton.window == todoinput_submit_btn){
-				if(strlength){
-					XSetWindowBackground(display, todoinput_submit_btn, WhitePixel(display, screen_num));
-					XClearWindow(display, todoinput_submit_btn);
-					
-					XftDraw *xft_draw = XftDrawCreate(display, todoinput_submit_btn, visual, colormap);
-    				XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, SUBMIT_BTN_TEXT_X, SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
-					
-					XftDrawDestroy(xft_draw);
+		case EnterNotify:
+			for(int i=0; i<todo_count; i++){
+				if(report.xcrossing.window == datatable_cursor->win){
+					XWindowAttributes win_attr;
+					XGetWindowAttributes(display, datatable_cursor->win, &win_attr);
+					removeTileBtn_pos = datatable_cursor->id;
+					XMoveWindow(display, removeTileBtn, win_attr.width-20, win_attr.y + (win_attr.height)/2 - 12/2);
+            		XMapWindow(display, removeTileBtn);
 				}
+				datatable_cursor = datatable_cursor->next;
+			}
+			datatable_cursor = datatable_firstitem;;
+			break;
+		/*case LeaveNotify:
+
+			for(int i=0; i<todo_count; i++){
+				if(report.xcrossing.window == datatable_cursor->win){
+					if (report.xcrossing.detail == NotifyInferior) {
+						printf("OHHKK\n");
+						XWindowAttributes win_attr;
+						XGetWindowAttributes(display, datatable_cursor->win, &win_attr);
+						XUnmapWindow(display, removeTileBtn);
+						// XDrawRectangle(display, report.xcrossing.window, defaultGC, (win_attr.width - 30), (win_attr.height - 2)/2 - 1, ((win_attr.width - 20) - (win_attr.width - 30)), 2);
+						//XClearArea(display, datatable_cursor->win, (win_attr.width - 30), (win_attr.height - 2)/2 - 1, ((win_attr.width - 20) - (win_attr.width - 30)), 2, True);
+					}
+				}
+				datatable_cursor = datatable_cursor->next;
+			}
+			datatable_cursor = datatable_firstitem;;
+			break;*/
+		case ButtonPress:
+			if(report.xbutton.button == 1){		
+				if(report.xbutton.window ==  removeTileBtn){
+					XUnmapWindow(display, removeTileBtn);
+					printf("REMOVED : %d\n", removeTileBtn_pos);
+					destroyTodoList();
+					db_delete_row(&db, removeTileBtn_pos);
+					todo_count = fetch_todo_count(&db);
+					db_primary_key = db_fetch_max_id(&db)+1;
+					populateTodoItems();
+				}
+				if(report.xbutton.window == addbtn_win){
+					XUnmapWindow(display, removeTileBtn);
+					XMapWindow(display, todoinput_win);
+					XMapWindow(display, todoinputwin_exit_btn);
+					XMapWindow(display, todoinput_textfield);
+					XMapWindow(display, todoinput_submit_btn);
+
+					XRaiseWindow(display, todoinput_win);
+					XRaiseWindow(display, todoinput_textfield);
+					XRaiseWindow(display, todoinputwin_exit_btn);
+					XRaiseWindow(display, todoinput_submit_btn);
+					break;
+				}
+				if(report.xbutton.window == todoinputwin_exit_btn){	
+					XUngrabKeyboard(display, CurrentTime);
+					XUnmapWindow(display, todoinput_win);
+					break;
+				}
+				if(report.xbutton.window == todoinput_submit_btn){
+					if(strlength){
+						XSetWindowBackground(display, todoinput_submit_btn, WhitePixel(display, screen_num));
+						XClearWindow(display, todoinput_submit_btn);
+						XftDraw *xft_draw = XftDrawCreate(display, todoinput_submit_btn, visual, colormap);
+	    				XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, SUBMIT_BTN_TEXT_X, SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
+						XftDrawDestroy(xft_draw);
+					}
+					break;
+				}
+
+	/*			for(int i=0; i<todo_count; i++){
+					if(report.xbutton.window == datatable_cursor->win){
+						XWindowAttributes win_attr;
+						XGetWindowAttributes(display, datatable_cursor->win, &win_attr);
+						if(((report.xbutton.x > (win_attr.width - 35)) && (report.xbutton.x < (win_attr.width - 10))) && ((report.xbutton.y > (win_attr.height - 2)/2 - 10) && (report.xbutton.y < (win_attr.height - 2)/2 + 10)) ){
+							printf("REMOVE : %d\n", i);
+						}
+					}
+					datatable_cursor = datatable_cursor->next;
+				}
+				datatable_cursor = datatable_firstitem;*/
+				break;
 			}
 			if(report.xbutton.window == root_win){
-				XWindowAttributes win_attr;
+				XUnmapWindow(display, removeTileBtn);
 				if(report.xbutton.button == 4){
+				//XUnmapWindow(display, removeTileBtn);
 					// SCROLL UP EVEN
+					XWindowAttributes win_attr;
 					XWindowAttributes last_win_attr;
 					XGetWindowAttributes(display, datatable_lastitem->win, &last_win_attr);
 					//printf("%d---\n", last_win_attr.y);
@@ -604,6 +680,7 @@ void start_event_loop(){
 				}
 				if(report.xbutton.button == 5){
 					// SCROLL DOWN EVENT
+					XWindowAttributes win_attr;
 					XWindowAttributes first_win_attr;
 					XGetWindowAttributes(display, datatable_firstitem->win, &first_win_attr);
 					//if(first_win_attr.y > first_window_y_offset){
@@ -616,32 +693,33 @@ void start_event_loop(){
 						datatable_cursor = datatable_firstitem;;
 					//}
 				}
+				break;
 			}
 			break;
 		case ButtonRelease:
-			if(report.xbutton.window == todoinput_submit_btn){
-				if(strlength){
-					XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
-					XClearWindow(display, todoinput_submit_btn);
-				     XftDraw *xft_draw = XftDrawCreate(display, todoinput_submit_btn, visual, colormap);
-					 XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, SUBMIT_BTN_TEXT_X, SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
-					 XftDrawDestroy(xft_draw);
+			if(report.xbutton.button == 1){
+				if(report.xbutton.window == todoinput_submit_btn){
+					if(strlength){
+						XSetWindowBackground(display, todoinput_submit_btn, addnewbtncolor.pixel);
+						XClearWindow(display, todoinput_submit_btn);
+					    XftDraw *xft_draw = XftDrawCreate(display, todoinput_submit_btn, visual, colormap);
+						XftDrawStringUtf8(xft_draw, &xft_color_black, xft_font_10, SUBMIT_BTN_TEXT_X, SUBMIT_BTN_TEXT_Y, (XftChar8 *)"Submit", 6);
+						XftDrawDestroy(xft_draw);
 
-					// LATER HANDLE THE DATA INSERTION IN PARALLEL TO IMPROVE PERFORMANCE
-					if(!insert_into_todotable(&db, db_primary_key,string)) exit(0);
-					
-					db_primary_key++;
-					todo_count = fetch_todo_count(&db);
-					memset(string, 0, strlength);
-					strlength = 0;
-					
-					unmapTodoItems();
-					populateTodoItems();
-
-					XUnmapWindow(display, todoinput_win);
-					XFreeGC(display, textfeild_cursor_gc);
-				}else{
-					printf("Nothing to SUBMIT!\n");
+						// LATER HANDLE THE DATA INSERTION IN PARALLEL TO IMPROVE PERFORMANCE
+						if(!insert_into_todotable(&db, db_primary_key,string)) exit(0);
+						db_primary_key++;
+						todo_count = fetch_todo_count(&db);
+						memset(string, 0, strlength);
+						strlength = 0;
+						destroyTodoList();
+						populateTodoItems();
+						XUngrabKeyboard(display, CurrentTime);
+						XUnmapWindow(display, todoinput_win);
+					}else{
+						printf("Nothing to SUBMIT!\n");
+					}
+					break;
 				}
 			}
 			break;
@@ -652,11 +730,13 @@ void start_event_loop(){
 					// HANDLE \N LATER
 					//strcat(string, "\n");
 					// strcat(string, "\0");
+					
 				}
 				else if(((keysym >= XK_KP_Space) && (keysym <= XK_KP_9)) || ((keysym>=XK_space) && (keysym <= XK_asciitilde))){
 					if(strlength< 100) strcat(string, buffer); else printf("MAX CHAR REACHED\n");
 					// strcat(string, "\0");
 					//printf("%s\n", string);
+					
 				}
 				else if((keysym == XK_BackSpace) || (keysym == XK_Delete)){
 					if(strlength > 0){
@@ -664,9 +744,8 @@ void start_event_loop(){
 						XClearWindow(display, todoinput_textfield);
 					}
 				}
-
 				strlength = strlen(string);
-				drawStringInTodoTextfield(&textfeild_cursor_gc ,string, strlength);
+				drawStringInTodoTextfield(&defaultGC ,string, strlength);
 			}
 			break;
 		default:
@@ -675,6 +754,7 @@ void start_event_loop(){
 		fflush(stdout);
 		XFlush(display);
 	}
+	XFreeGC(display, defaultGC);
 }
 
 
@@ -801,7 +881,7 @@ void createInitialMsgWindow(){
 
 void drawInitialMsgString(){
 	char *initial_msg = "Empty. Try creating one.";
-	draw_string_on_window(&initialmsg_window, xft_color_tilecolor, -1, -1, initial_msg, strlen(initial_msg));
+	draw_string_on_window(&initialmsg_window, xft_color_tilecolor, 0,-1, -1, initial_msg, strlen(initial_msg));
 }
 
 int calculate_average_char_width(XFontStruct *font_info) {
@@ -813,13 +893,13 @@ int calculate_average_char_width(XFontStruct *font_info) {
     return sample_text_width / sample_text_length;
 }
 
-void draw_string_on_window(Window *win, XftColor color,int x, int y, char *string, int strlength){
+void draw_string_on_window(Window *win, XftColor color, int x_pad, int x, int y, char *string, int strlength){
 	/* IF x : -1, draw on x-center of window
 	   IF y : -1, draw on y-center of window*/
 	XWindowAttributes win_attr;
 	XGetWindowAttributes(display, *win, &win_attr);
 
-	int avilable_width = win_attr.width - x - 15;
+	int avilable_width = win_attr.width - x - 15 - x_pad;
 	
 	XGlyphInfo extents;
 	XftTextExtentsUtf8(display, xft_font_10, (const FcChar8 *)string, strlen(string), &extents);

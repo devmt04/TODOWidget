@@ -37,7 +37,7 @@ int fetch_all_from_table(sqlite3 **db){
 	sqlite3_finalize(stmt);
 }
 
-int fetch_max_id(sqlite3 **db){
+int db_fetch_max_id(sqlite3 **db){
 	int rc, result;
 	sqlite3_stmt *stmt;
 	char *sql = "SELECT MAX(ID) FROM TODOTABLE;";
@@ -78,7 +78,6 @@ int is_table_exists(sqlite3 **db){
 
 	if(sqlite3_prepare_v2(*db, sql, -1, &stmt, NULL) == SQLITE_OK){
 		sqlite3_bind_text(stmt, 1, "TODOTABLE", -1, SQLITE_STATIC);
-
 		if (sqlite3_step(stmt) == SQLITE_ROW) {
             result = 1;
             printf("DB: TABLE TODO ALREAD EXISTS.\n");
@@ -113,6 +112,26 @@ int insert_into_todotable(sqlite3 **db, int id, char *string){
     return 1;
 }
 
+int db_delete_row(sqlite3 **db, int pk){
+	char *sql = "DELETE FROM TODOTABLE WHERE ID = ?;";
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(*db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(*db));
+        return 0;
+    }
+    sqlite3_bind_int(stmt, 1, pk);
+
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        fprintf(stderr, "Execution failed: %s\n", sqlite3_errmsg(*db));
+        sqlite3_finalize(stmt);
+        return 0;
+    } else {
+        printf("Entry with primary key %d deleted successfully.\n", pk);
+    	sqlite3_finalize(stmt);
+    }
+    return 1;
+}
 
 void close_db(sqlite3 **db){
 	sqlite3_close(*db);
@@ -147,7 +166,7 @@ int prepare_database(sqlite3 **db){
 		return 0; 
 	}else{
 		fetch_all_from_table(db);
-		return fetch_max_id(db)+1;
+		return db_fetch_max_id(db)+1;
 	}
 
 }
