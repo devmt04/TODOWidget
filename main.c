@@ -395,8 +395,8 @@ void createAndMap_root_window(int argc, char **argv){
 	MotifWmHints hints;
 	hints.flags = MWM_HINTS_DECORATIONS;
 	hints.decorations = 0 ;
-	//XChangeProperty(display, root_win, mwmHintsProperty, mwmHintsProperty, 32,
-                //   PropModeReplace, (unsigned char *)&hints, sizeof(hints)/4);
+	XChangeProperty(display, root_win, mwmHintsProperty, mwmHintsProperty, 32,
+                   PropModeReplace, (unsigned char *)&hints, sizeof(hints)/4);
 
 
 	// Allocating Size Hints
