@@ -1,4 +1,4 @@
-# TODOWidget ![TODOWidget Logo](images/logo.png)
+# TODOWidget ![TODOWidget Logo](images/logo480x300.png)
 
 ## Overview
 
