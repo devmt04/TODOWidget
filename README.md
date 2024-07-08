@@ -1,11 +1,11 @@
-# TODOWidget
+# TODOWidget ![TODOWidget Logo](images/logo.png)
 
 ## Overview
 
 TODOWidget is a simple and lightweight desktop widget for Linux, created using pure X11's low-level API XLib with no external dependencies in C. This widget allows you to keep track of your TODOs right on your desktop.
 
-![TODOWidget Screenshot](screenshots/screenshot1.jpg)
-![TODOWidget Screenshot](screenshots/screenshot2.jpg)
+![TODOWidget Screenshot](images/screenshot1.jpg)
+![TODOWidget Screenshot](images/screenshot2.jpg)
 
 ## Features
 
