@@ -60,3 +60,9 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 ## Acknowledgements
 
 This project is a hobby project to learn more about the Linux windowing system (X11) and is inspired by the need for a simple and efficient desktop widget for managing TODOs.
+
+## Support My Work
+
+If you find my work useful, consider supporting me by buying me a coffee!
+
+<a href="https://buymeacoffee.com/mohitdeoli" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
